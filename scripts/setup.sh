@@ -14,13 +14,14 @@ echo ""
 # Check Node.js
 if ! command -v node &> /dev/null; then
     echo "❌ Node.js is not installed."
-    echo "   Install it from https://nodejs.org (v18+ required)"
+    echo "   Install it from https://nodejs.org (v22.13+ or v24+ required)"
     exit 1
 fi
 
-NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo "❌ Node.js v18+ required (you have $(node -v))"
+NODE_MAJOR=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+NODE_MINOR=$(node -v | cut -d'v' -f2 | cut -d'.' -f2)
+if ! { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -ge 13 ]; } && [ "$NODE_MAJOR" -lt 24 ]; then
+    echo "❌ Node.js v22.13+ or v24+ required (you have $(node -v))"
     echo "   Update from https://nodejs.org"
     exit 1
 fi

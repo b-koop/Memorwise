@@ -1,6 +1,6 @@
 # Memorwise
 
-An open-source, local-first alternative to NotebookLM. Drop in your PDFs, images, audio, video, URLs, or YouTube links — Memorwise chunks and embeds everything on your machine, then lets you have a conversation with your documents using whichever LLM you prefer.
+An open-source, local-first alternative to NotebookLM. Drop in PDFs, images, audio, video, URLs, or YouTube links. Memorwise chunks and embeds them on your machine, then lets you chat with the material using the LLM provider you prefer.
 
 ## Get Started
 
@@ -8,11 +8,11 @@ An open-source, local-first alternative to NotebookLM. Drop in your PDFs, images
 npx memorwise
 ```
 
-That's it. This clones the repo, installs dependencies, starts the server, and opens your browser to **http://localhost:4747**. Head to **Settings** (gear icon), connect at least one LLM provider, create a notebook, add some sources, and start chatting.
+That's it. The installer clones the repo, installs dependencies, starts the server, and opens your browser to **http://localhost:4747**. Head to **Settings** (gear icon), connect at least one LLM provider, create a notebook, add sources, and start chatting.
 
 You can also visit **[local.memorwise.com](http://local.memorwise.com)** — it auto-detects and redirects to your running instance.
 
-**Requirements:** Node.js 18+ and git
+**Requirements:** Node.js 22.13+ or 24+ and git
 
 **Prefer to do it manually?**
 ```bash
@@ -68,6 +68,16 @@ Open Settings → **Providers**. Pick at least one — you can always add more l
 
 Sources are chunked, embedded, and indexed on upload. Images go through local OCR via Tesseract.js. Audio and video are transcribed with Whisper.
 
+## Safety Limits
+
+Memorwise runs locally, but imported content is still treated as untrusted.
+
+- URL imports only fetch public `http` or `https` addresses. Localhost, private networks, link-local addresses, and IPv4-in-IPv6 private forms are blocked.
+- File uploads stream to disk and are capped at 500MB per file.
+- PDF text extraction is capped at 50MB because the parser needs an in-memory buffer.
+- Chat context reads use bounded file prefixes, so a large source cannot force an oversized context buffer.
+- Kokoro TTS listens on `127.0.0.1` by default. Its request body and text length are capped. Use `KOKORO_HOST` or `KOKORO_MAX_TEXT_CHARS` only when you need to change that behavior.
+
 ## Optional Dependencies
 
 Everything below is optional — only install what you need:
@@ -98,7 +108,7 @@ MEMORWISE_DATA_DIR=/path/to/data npm run dev
 
 ## Local TTS with Kokoro (Optional)
 
-Kokoro is a small (82M parameter) text-to-speech model that runs entirely on your machine — free, offline, with 54 voices. It powers the Audio Overview feature so you can generate podcasts without an OpenAI key.
+Kokoro is a small (82M parameter) text-to-speech model that runs on your machine. It powers Audio Overview when you want generated podcast audio without an OpenAI key.
 
 **Quick setup:**
 ```bash
@@ -148,7 +158,7 @@ Add Memorwise to your Dock/app menu so you can launch it with a click:
 ./scripts/create-desktop-app.sh
 ```
 
-**macOS:** Creates `Memorwise.app` in `/Applications` — drag it to your Dock.
+**macOS:** Creates `Memorwise.app` in `/Applications`. Drag it to your Dock.
 **Linux:** Creates a `.desktop` launcher in your app menu.
 
 The app automatically starts the server if it's not already running, waits for it to be ready, then opens your browser.

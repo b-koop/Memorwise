@@ -4,12 +4,19 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { embedTexts } from './embeddings';
 import { addChunks, type ChunkWithVector } from './vectorstore';
 import { updateSourceStatus, updateSourceSummary } from '../db/queries';
-import { ocrImage, parsePdfWithOcrFallback } from './ocr';
+import { ocrImage, parsePdfText } from './ocr';
 import { transcribeAudio, transcribeVideo } from './transcribe';
+import { AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS } from '../source-types';
 
-const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'];
-const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'wma'];
-const VIDEO_EXTS = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'flv', 'wmv'];
+const MAX_TEXT_SOURCE_BYTES = 10 * 1024 * 1024;
+
+function readTextFileBounded(filepath: string): string {
+  const stat = fs.statSync(filepath);
+  if (stat.size > MAX_TEXT_SOURCE_BYTES) {
+    throw new Error(`Text source exceeds ${MAX_TEXT_SOURCE_BYTES / 1024 / 1024}MB processing limit`);
+  }
+  return fs.readFileSync(filepath, 'utf-8');
+}
 
 // Simple processing queue — max 2 concurrent ingestions
 const queue: (() => Promise<void>)[] = [];
@@ -36,7 +43,7 @@ async function parseFile(filepath: string, filetype: string, sourceType: string)
   const ext = filetype.toLowerCase();
 
   if (sourceType === 'url' || sourceType === 'youtube') {
-    return fs.readFileSync(filepath, 'utf-8');
+    return readTextFileBounded(filepath);
   }
 
   if (IMAGE_EXTS.includes(ext) || sourceType === 'image') {
@@ -52,19 +59,20 @@ async function parseFile(filepath: string, filetype: string, sourceType: string)
   }
 
   if (ext === 'pdf') {
-    return parsePdfWithOcrFallback(filepath);
+    return parsePdfText(filepath);
   }
 
   if (['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods'].includes(ext)) {
     const officeparser = await import('officeparser');
-    return await officeparser.parseOfficeAsync(filepath) as string;
+    const ast = await officeparser.parseOffice(filepath);
+    return ast.toText();
   }
 
   if (['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'htm', 'rtf'].includes(ext)) {
-    return fs.readFileSync(filepath, 'utf-8');
+    return readTextFileBounded(filepath);
   }
 
-  return fs.readFileSync(filepath, 'utf-8');
+  return readTextFileBounded(filepath);
 }
 
 async function doIngest(

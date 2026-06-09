@@ -6,6 +6,10 @@ export async function POST(req: Request) {
   if (!notebookId || !fromId || !fromType || !toId || !toType) {
     return NextResponse.json({ error: 'notebookId, fromId, fromType, toId, and toType required' }, { status: 400 });
   }
-  const link = queries.createLink(notebookId, fromId, fromType, toId, toType);
-  return NextResponse.json(link);
+  try {
+    const link = queries.createLink(notebookId, fromId, fromType, toId, toType);
+    return NextResponse.json(link);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid link' }, { status: 400 });
+  }
 }

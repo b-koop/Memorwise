@@ -43,7 +43,11 @@ export async function search(notebookId: string, queryVector: number[], topK = 6
   const conn = await getConnection();
   try {
     const table = await conn.openTable(tableName(notebookId));
-    let query = table.vectorSearch(queryVector).limit(sourceId ? topK * 3 : topK);
+    let query = table.vectorSearch(queryVector);
+    if (sourceId && /^[a-f0-9-]+$/i.test(sourceId)) {
+      query = query.where(`source_id = '${sourceId}'`);
+    }
+    query = query.limit(topK);
     const results = await query.toArray();
     let mapped = results.map((r: Record<string, unknown>) => ({
       source_id: r.source_id as string, chunk_index: r.chunk_index as number,

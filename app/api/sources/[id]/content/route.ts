@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import * as queries from '@/lib/db/queries';
+import { isBinarySource } from '@/lib/source-types';
 
-const BINARY_TYPES = ['image', 'audio', 'video'];
-const BINARY_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'mp3', 'wav', 'flac', 'ogg', 'm4a', 'mp4', 'mkv', 'avi', 'mov', 'webm'];
+function readTextPrefix(filepath: string, maxBytes = 64 * 1024): string {
+  const fd = fs.openSync(filepath, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(fd, buffer, 0, maxBytes, 0);
+    return buffer.subarray(0, bytesRead).toString('utf-8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 404 });
 
   let content = '';
-  const isBinary = BINARY_TYPES.includes(source.source_type) || BINARY_EXTS.includes(source.filetype);
+  const isBinary = isBinarySource(source.filetype, source.source_type);
 
   if (isBinary) {
     // For binary sources (images, audio, video), show the extracted text from vector chunks
@@ -48,7 +57,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   } else {
     // Text-based source — read the file directly
     try {
-      content = fs.readFileSync(source.filepath, 'utf-8');
+      content = readTextPrefix(source.filepath);
     } catch {
       content = '(Unable to read source file)';
     }

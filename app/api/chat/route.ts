@@ -37,10 +37,12 @@ export async function POST(req: Request) {
     if (readySources.length > 0) {
       try {
         const { getNotebookContext } = await import('@/lib/generate');
-        const fallbackContext = getNotebookContext(notebookId, 4000);
+        const fallbackContext = getNotebookContext(notebookId, 4000, sourceId || undefined);
         if (fallbackContext.trim()) {
           context = fallbackContext;
-          citations = readySources.map(s => ({ source_id: s.id, filename: s.filename, chunk_text: '', score: 1 }));
+          citations = readySources
+            .filter(s => !sourceId || s.id === sourceId)
+            .map(s => ({ source_id: s.id, filename: s.filename, chunk_text: '', score: 1 }));
         }
       } catch { /* fallback failed too */ }
     }

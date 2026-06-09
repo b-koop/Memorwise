@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as queries from '@/lib/db/queries';
 import { deleteNotebookTable } from '@/lib/rag/vectorstore';
+import { removeNotebookSourcesDir } from '@/lib/source-files';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,6 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await deleteNotebookTable(id);
+  removeNotebookSourcesDir(id);
   queries.deleteNotebook(id);
   return NextResponse.json({ success: true });
 }

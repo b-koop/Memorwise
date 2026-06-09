@@ -52,12 +52,26 @@ Module._resolveFilename = function (request, parent, isMain, options) {
 // ─── Now we can import project modules ───
 
 const queries = require('./lib/db/queries.ts');
+const appPackage = require('./package.json');
 const generate = require('./lib/generate.ts');
 const { registry } = require('./lib/llm/provider-registry.ts');
 const { ingestSource } = require('./lib/rag/ingest.ts');
 const { retrieveContext } = require('./lib/rag/retrieve.ts');
-const { getDataDir, getNotebookSourcesPath } = require('./lib/paths.ts');
+const { getDataDir, getSourceFilePath, sanitizeFilename } = require('./lib/paths.ts');
+const { removeNotebookSourcesDir, unlinkSourceFile } = require('./lib/source-files.ts');
 const fs = require('fs');
+const MAX_MCP_TEXT_SOURCE_BYTES = 10 * 1024 * 1024;
+
+function readTextPrefix(filepath, maxBytes = 64 * 1024) {
+  const fd = fs.openSync(filepath, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(fd, buffer, 0, maxBytes, 0);
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
 
 // ─── Tool Definitions ───
 
@@ -128,45 +142,67 @@ async function handleTool(name, args) {
   switch (name) {
     case 'memorwise_list_notebooks': return queries.listNotebooks();
     case 'memorwise_create_notebook': return queries.createNotebook(args.name, args.description || '');
-    case 'memorwise_delete_notebook': queries.deleteNotebook(args.notebookId); return { success: true };
+    case 'memorwise_delete_notebook': {
+      const nb = queries.getNotebook(args.notebookId);
+      if (nb) {
+        const { deleteNotebookTable } = require('./lib/rag/vectorstore.ts');
+        await deleteNotebookTable(args.notebookId);
+        removeNotebookSourcesDir(args.notebookId);
+        queries.deleteNotebook(args.notebookId);
+      }
+      return { success: true };
+    }
     case 'memorwise_get_notebook': return queries.getNotebook(args.notebookId) || { error: 'Not found' };
 
     case 'memorwise_list_sources': return queries.listSources(args.notebookId);
     case 'memorwise_add_url_source': {
       const { extractFromUrl } = require('./lib/rag/web-extract.ts');
+      if (!queries.getNotebook(args.notebookId)) throw new Error('Notebook not found');
       const ex = await extractFromUrl(args.url);
-      const dir = getNotebookSourcesPath(args.notebookId);
-      const fp = path.join(dir, `${Date.now()}_${ex.title.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50)}.txt`);
-      fs.writeFileSync(fp, ex.text);
+      const safeTitle = ex.title.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50) || 'url-source';
+      const fp = getSourceFilePath(args.notebookId, `${safeTitle}.txt`);
+      fs.writeFileSync(fp, ex.text, { flag: 'wx' });
       const src = queries.createSource(args.notebookId, ex.title, fp, 'txt', ex.text.length, ex.sourceType);
       ingestSource(src.id, args.notebookId, fp, 'txt', ex.sourceType);
       return { id: src.id, filename: src.filename, status: 'processing', message: 'Indexing started' };
     }
     case 'memorwise_add_text_source': {
-      const dir = getNotebookSourcesPath(args.notebookId);
-      const fp = path.join(dir, `${Date.now()}_${args.filename}`);
-      fs.writeFileSync(fp, args.content);
-      const ext = path.extname(args.filename).slice(1) || 'txt';
+      if (!queries.getNotebook(args.notebookId)) throw new Error('Notebook not found');
+      if (Buffer.byteLength(args.content, 'utf8') > MAX_MCP_TEXT_SOURCE_BYTES) throw new Error('Text source exceeds 10MB limit');
+      const safeFilename = sanitizeFilename(args.filename);
+      const fp = getSourceFilePath(args.notebookId, safeFilename);
+      fs.writeFileSync(fp, args.content, { flag: 'wx' });
+      const ext = path.extname(safeFilename).slice(1) || 'txt';
       const src = queries.createSource(args.notebookId, args.filename, fp, ext, args.content.length, 'file');
       ingestSource(src.id, args.notebookId, fp, ext, 'file');
       return { id: src.id, filename: src.filename, status: 'processing', message: 'Indexing started' };
     }
     case 'memorwise_delete_source': {
       const s = queries.getSource(args.sourceId);
-      if (s) { const { deleteSourceChunks } = require('./lib/rag/vectorstore.ts'); await deleteSourceChunks(s.notebook_id, args.sourceId); queries.deleteSource(args.sourceId); }
+      if (s) {
+        const { deleteSourceChunks } = require('./lib/rag/vectorstore.ts');
+        await deleteSourceChunks(s.notebook_id, args.sourceId);
+        unlinkSourceFile(s);
+        queries.deleteSource(args.sourceId);
+      }
       return { success: true };
     }
     case 'memorwise_get_source_content': {
       const s = queries.getSource(args.sourceId);
       if (!s) return { error: 'Not found' };
-      try { return { filename: s.filename, type: s.source_type, summary: s.summary, content: fs.readFileSync(s.filepath, 'utf-8').slice(0, 10000) }; }
+      try { return { filename: s.filename, type: s.source_type, summary: s.summary, content: readTextPrefix(s.filepath, 64 * 1024).slice(0, 10000) }; }
       catch { return { filename: s.filename, summary: s.summary, content: '(not readable)' }; }
     }
 
     case 'memorwise_chat': {
       let ctx = '', cites = [];
       try { const r = await retrieveContext(args.notebookId, args.question, 8, args.sourceId); ctx = r.context; cites = r.citations; } catch {}
-      if (!ctx) { ctx = generate.getNotebookContext(args.notebookId, 5000); cites = queries.listSources(args.notebookId).filter(s => s.status === 'ready' || s.status === 'error').map(s => ({ filename: s.filename })); }
+      if (!ctx) {
+        ctx = generate.getNotebookContext(args.notebookId, 5000, args.sourceId);
+        cites = queries.listSources(args.notebookId)
+          .filter(s => (s.status === 'ready' || s.status === 'error') && (!args.sourceId || s.id === args.sourceId))
+          .map(s => ({ filename: s.filename }));
+      }
       if (!ctx) return { answer: 'No documents in this notebook.', citations: [] };
       const answer = await registry.getActiveProvider().generate({ model: registry.getActiveChatModel(), messages: [{ role: 'system', content: `Answer using document context. Cite with [1],[2].\n\nContext:\n${ctx}` }, { role: 'user', content: args.question }] });
       return { answer, citations: [...new Map(cites.map(c => [c.filename, c])).values()] };
@@ -245,7 +281,7 @@ function send(msg) {
 
 function handleRequest(req) {
   if (req.method === 'initialize') {
-    send({ jsonrpc: '2.0', id: req.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'memorwise', version: '1.0.8' } } });
+    send({ jsonrpc: '2.0', id: req.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'memorwise', version: appPackage.version } } });
   } else if (req.method === 'notifications/initialized') {
     // no response
   } else if (req.method === 'tools/list') {
@@ -264,21 +300,20 @@ function handleRequest(req) {
 
 // ─── Stdio Transport ───
 
-let buffer = '';
-process.stdin.setEncoding('utf-8');
+let buffer = Buffer.alloc(0);
 process.stdin.on('data', (chunk) => {
-  buffer += chunk;
+  buffer = Buffer.concat([buffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
   while (true) {
     const headerEnd = buffer.indexOf('\r\n\r\n');
     if (headerEnd === -1) break;
-    const header = buffer.slice(0, headerEnd);
+    const header = buffer.subarray(0, headerEnd).toString('ascii');
     const match = header.match(/Content-Length:\s*(\d+)/i);
-    if (!match) { buffer = buffer.slice(headerEnd + 4); continue; }
+    if (!match) { buffer = buffer.subarray(headerEnd + 4); continue; }
     const len = parseInt(match[1]);
     const bodyStart = headerEnd + 4;
     if (buffer.length < bodyStart + len) break;
-    const body = buffer.slice(bodyStart, bodyStart + len);
-    buffer = buffer.slice(bodyStart + len);
+    const body = buffer.subarray(bodyStart, bodyStart + len).toString('utf8');
+    buffer = buffer.subarray(bodyStart + len);
     try { handleRequest(JSON.parse(body)); } catch (e) { process.stderr.write(`[memorwise-mcp] Parse error: ${e}\n`); }
   }
 });

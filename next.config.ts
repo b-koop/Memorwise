@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 import path from 'path';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['better-sqlite3', '@lancedb/lancedb', 'apache-arrow', 'tesseract.js', '@huggingface/transformers'],
+  serverExternalPackages: ['better-sqlite3', '@lancedb/lancedb', 'apache-arrow', 'tesseract.js', '@huggingface/transformers', 'officeparser'],
   outputFileTracingRoot: path.join(import.meta.dirname),
 };
 

@@ -1,6 +1,9 @@
 import { registry } from './llm/provider-registry';
 import * as queries from './db/queries';
 import fs from 'fs';
+import { isBinarySource } from './source-types';
+
+const MAX_CONTEXT_CHARS = 20_000;
 
 /** Generate text using the active LLM (non-streaming) */
 async function generate(prompt: string, systemPrompt?: string): Promise<string> {
@@ -13,8 +16,25 @@ async function generate(prompt: string, systemPrompt?: string): Promise<string> 
   return provider.generate({ model, messages });
 }
 
-const BINARY_SOURCE_TYPES = ['image', 'audio', 'video'];
-const BINARY_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'mp3', 'wav', 'flac', 'ogg', 'm4a', 'mp4', 'mkv', 'avi', 'mov', 'webm'];
+function readTextPrefix(filepath: string, maxBytes: number): string {
+  const stat = fs.statSync(filepath);
+  const bytesToRead = Math.min(Math.max(0, Math.floor(maxBytes)), stat.size);
+  if (bytesToRead === 0) return '';
+
+  const fd = fs.openSync(filepath, 'r');
+  try {
+    const buffer = Buffer.alloc(bytesToRead);
+    const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead, 0);
+    return buffer.subarray(0, bytesRead).toString('utf-8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function clampContextChars(maxChars: number): number {
+  if (!Number.isFinite(maxChars)) return 3000;
+  return Math.min(Math.max(Math.floor(maxChars), 0), MAX_CONTEXT_CHARS);
+}
 
 function isReadableText(text: string): boolean {
   if (!text || text.length < 20) return false;
@@ -24,9 +44,13 @@ function isReadableText(text: string): boolean {
 }
 
 /** Get combined text from all ready sources — uses summaries when available, skips binary garbage */
-export function getNotebookContext(notebookId: string, maxChars = 3000): string {
+export function getNotebookContext(notebookId: string, maxChars = 3000, sourceId?: string): string {
+  const contextLimit = clampContextChars(maxChars);
   // Include 'ready' and 'error' sources — error means embedding failed but text may still be readable
-  const sources = queries.listSources(notebookId).filter(s => s.status === 'ready' || s.status === 'error');
+  const sources = queries.listSources(notebookId).filter(s =>
+    (s.status === 'ready' || s.status === 'error') &&
+    (!sourceId || s.id === sourceId)
+  );
   let combined = '';
   for (const src of sources) {
     let text = '';
@@ -36,20 +60,20 @@ export function getNotebookContext(notebookId: string, maxChars = 3000): string 
       text = src.summary;
     }
     // 2. For binary sources (images, audio, video), skip raw file — only use summary or chunks
-    else if (BINARY_SOURCE_TYPES.includes(src.source_type) || BINARY_EXTS.includes(src.filetype)) {
+    else if (isBinarySource(src.filetype, src.source_type)) {
       continue; // Skip — no summary available and raw file is binary
     }
     // 3. For text sources, read the file
     else {
-      try { text = fs.readFileSync(src.filepath, 'utf-8'); } catch { continue; }
+      try { text = readTextPrefix(src.filepath, Math.max(contextLimit * 4, 4 * 1024)); } catch { continue; }
       if (!isReadableText(text)) continue; // Skip garbled/binary content
     }
 
     if (!text.trim()) continue;
 
     const header = `\n--- ${src.filename} ---\n`;
-    if (combined.length + header.length + text.length > maxChars) {
-      const remaining = maxChars - combined.length - header.length;
+    if (combined.length + header.length + text.length > contextLimit) {
+      const remaining = contextLimit - combined.length - header.length;
       if (remaining > 100) combined += header + text.slice(0, remaining) + '...';
       break;
     }
@@ -81,7 +105,7 @@ export async function generateSourceSummary(sourceId: string): Promise<string> {
   if (!source) throw new Error('Source not found');
 
   let text: string;
-  try { text = fs.readFileSync(source.filepath, 'utf-8'); } catch { throw new Error('Cannot read source file'); }
+  try { text = readTextPrefix(source.filepath, 128 * 1024); } catch { throw new Error('Cannot read source file'); }
 
   // Keep it short for local models
   const truncated = text.slice(0, 2500);

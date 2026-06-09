@@ -7,8 +7,12 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const { name, parentId } = await req.json();
-  queries.updateFolder(id, name, parentId);
-  return NextResponse.json({ success: true });
+  try {
+    queries.updateFolder(id, name, parentId);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid folder' }, { status: 400 });
+  }
 }
 
 export async function DELETE(

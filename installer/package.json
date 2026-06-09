@@ -1,6 +1,6 @@
 {
   "name": "memorwise",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "description": "Your local, open-source notebook for chatting with documents using any LLM",
   "bin": {
     "memorwise": "bin/cli.js"
@@ -9,7 +9,17 @@
     "bin/cli.js",
     "README.md"
   ],
-  "keywords": ["notebooklm", "rag", "llm", "ai", "documents", "chat", "local", "open-source", "memorwise"],
+  "keywords": [
+    "notebooklm",
+    "rag",
+    "llm",
+    "ai",
+    "documents",
+    "chat",
+    "local",
+    "open-source",
+    "memorwise"
+  ],
   "author": "robzilla1738",
   "license": "MIT",
   "repository": {
@@ -18,6 +28,6 @@
   },
   "homepage": "https://github.com/robzilla1738/Memorwise#readme",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^22.13.0 || >=24.0.0"
   }
 }

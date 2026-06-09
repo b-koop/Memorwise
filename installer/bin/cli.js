@@ -5,7 +5,18 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const VERSION = '1.0.22';
+function readVersion() {
+  const candidates = [
+    path.join(__dirname, '..', 'package.json'),
+    path.join(__dirname, '..', '..', 'package.json'),
+  ];
+  for (const file of candidates) {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')).version; } catch {}
+  }
+  return '0.0.0';
+}
+
+const VERSION = readVersion();
 const REPO = 'https://github.com/robzilla1738/Memorwise.git';
 const APP_NAME = 'memorwise';
 const PORT = 4747;
@@ -35,6 +46,11 @@ function fail(msg) { log(`  ${c.red}${c.bold}✗${c.reset} ${msg}`); }
 function info(msg) { log(`    ${c.dim}${msg}${c.reset}`); }
 
 const isWin = os.platform() === 'win32';
+
+function supportsNodeVersion(version) {
+  const [major, minor] = version.replace(/^v/, '').split('.').map(Number);
+  return (major === 22 && minor >= 13) || major >= 24;
+}
 
 function checkCommand(cmd) {
   try { execSync(isWin ? `where ${cmd}` : `which ${cmd}`, { stdio: 'ignore' }); return true; } catch { return false; }
@@ -147,10 +163,9 @@ async function main() {
   banner();
 
   // Check Node version
-  const nodeVersion = parseInt(process.version.slice(1));
-  if (nodeVersion < 18) {
+  if (!supportsNodeVersion(process.version)) {
     log();
-    fail(`Node.js 18+ required (you have ${process.version})`);
+    fail(`Node.js 22.13+ or 24+ required (you have ${process.version})`);
     info(`Download: https://nodejs.org`);
     process.exit(1);
   }
@@ -249,10 +264,11 @@ async function main() {
 
 function startServer(dir, port, noOpen) {
   const url = `http://localhost:${port}`;
+  const displayUrl = port !== PORT ? url : 'http://local.memorwise.com:4747';
 
   log(`  ${c.dim}${'─'.repeat(49)}${c.reset}`);
   log();
-  log(`  ${c.green}${c.bold}  Ready!${c.reset}  ${c.cyan}http://local.memorwise.com:4747${c.reset}`);
+  log(`  ${c.green}${c.bold}  Ready!${c.reset}  ${c.cyan}${displayUrl}${c.reset}`);
   log();
   log(`  ${c.dim}  Open Settings to configure your LLM provider${c.reset}`);
   log(`  ${c.dim}  Add to Dock: ./scripts/create-desktop-app.sh${c.reset}`);

@@ -21,11 +21,17 @@ export function getNotebook(id: string): Notebook | undefined {
   return getDb().prepare('SELECT * FROM notebooks WHERE id = ?').get(id) as Notebook | undefined;
 }
 
+function requireNotebook(id: string): void {
+  if (!getNotebook(id)) throw new Error('Notebook not found');
+}
+
 // --- Sources ---
 export function listSources(notebookId: string): Source[] {
   return getDb().prepare('SELECT * FROM sources WHERE notebook_id = ? ORDER BY created_at DESC').all(notebookId) as Source[];
 }
 export function createSource(notebookId: string, filename: string, filepath: string, filetype: string, fileSize: number, sourceType = 'file', folderId?: string): Source {
+  requireNotebook(notebookId);
+  if (folderId) requireFolderInNotebook(folderId, notebookId);
   const id = uuid();
   getDb().prepare('INSERT INTO sources (id, notebook_id, filename, filepath, filetype, file_size, source_type, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, notebookId, filename, filepath, filetype, fileSize, sourceType, folderId ?? null);
   return getDb().prepare('SELECT * FROM sources WHERE id = ?').get(id) as Source;
@@ -38,6 +44,9 @@ export function updateSourceStatus(id: string, status: string, chunkCount?: numb
   }
 }
 export function updateSourceFolder(id: string, folderId: string | null): void {
+  const source = getSource(id);
+  if (!source) throw new Error('Source not found');
+  if (folderId) requireFolderInNotebook(folderId, source.notebook_id);
   getDb().prepare('UPDATE sources SET folder_id = ? WHERE id = ?').run(folderId, id);
 }
 export function deleteSource(id: string): void {
@@ -64,12 +73,34 @@ export function getSourceChunks(sourceId: string): string[] {
 export function listFolders(notebookId: string): Folder[] {
   return getDb().prepare('SELECT * FROM folders WHERE notebook_id = ? ORDER BY name ASC').all(notebookId) as Folder[];
 }
+export function getFolder(id: string): Folder | undefined {
+  return getDb().prepare('SELECT * FROM folders WHERE id = ?').get(id) as Folder | undefined;
+}
+function requireFolderInNotebook(folderId: string, notebookId: string): Folder {
+  const folder = getFolder(folderId);
+  if (!folder || folder.notebook_id !== notebookId) throw new Error('Folder not found in notebook');
+  return folder;
+}
+function assertFolderParent(folderId: string | undefined, notebookId: string, updatingFolderId?: string): void {
+  if (!folderId) return;
+  let current: string | null = folderId;
+  while (current) {
+    if (updatingFolderId && current === updatingFolderId) throw new Error('Folder cannot be its own descendant');
+    const folder = requireFolderInNotebook(current, notebookId);
+    current = folder.parent_id;
+  }
+}
 export function createFolder(notebookId: string, name: string, parentId?: string): Folder {
+  requireNotebook(notebookId);
+  assertFolderParent(parentId, notebookId);
   const id = uuid();
   getDb().prepare('INSERT INTO folders (id, notebook_id, parent_id, name) VALUES (?, ?, ?, ?)').run(id, notebookId, parentId ?? null, name);
   return getDb().prepare('SELECT * FROM folders WHERE id = ?').get(id) as Folder;
 }
 export function updateFolder(id: string, name?: string, parentId?: string | null): void {
+  const folder = getFolder(id);
+  if (!folder) throw new Error('Folder not found');
+  if (parentId !== undefined && parentId !== null) assertFolderParent(parentId, folder.notebook_id, id);
   if (name !== undefined) getDb().prepare('UPDATE folders SET name = ? WHERE id = ?').run(name, id);
   if (parentId !== undefined) getDb().prepare('UPDATE folders SET parent_id = ? WHERE id = ?').run(parentId, id);
 }
@@ -86,6 +117,7 @@ export function listTags(notebookId: string): Tag[] {
   return getDb().prepare('SELECT * FROM tags WHERE notebook_id = ? ORDER BY name ASC').all(notebookId) as Tag[];
 }
 export function createTag(notebookId: string, name: string, color?: string): Tag {
+  requireNotebook(notebookId);
   const id = uuid();
   getDb().prepare('INSERT INTO tags (id, notebook_id, name, color) VALUES (?, ?, ?, ?)').run(id, notebookId, name, color || '#6366f1');
   return getDb().prepare('SELECT * FROM tags WHERE id = ?').get(id) as Tag;
@@ -95,6 +127,9 @@ export function deleteTag(id: string): void {
   getDb().prepare('DELETE FROM tags WHERE id = ?').run(id);
 }
 export function assignTag(tagId: string, targetId: string, targetType: string): void {
+  const tag = getDb().prepare('SELECT * FROM tags WHERE id = ?').get(tagId) as Tag | undefined;
+  if (!tag) throw new Error('Tag not found');
+  requireTargetInNotebook(tag.notebook_id, targetId, targetType);
   getDb().prepare('INSERT OR IGNORE INTO tag_assignments (tag_id, target_id, target_type) VALUES (?, ?, ?)').run(tagId, targetId, targetType);
 }
 export function unassignTag(tagId: string, targetId: string): void {
@@ -105,10 +140,26 @@ export function getTagsForTarget(targetId: string): Tag[] {
 }
 
 // --- Links ---
+function requireTargetInNotebook(notebookId: string, targetId: string, targetType: string): void {
+  if (targetType === 'source') {
+    const source = getSource(targetId);
+    if (!source || source.notebook_id !== notebookId) throw new Error('Source target not found in notebook');
+    return;
+  }
+  if (targetType === 'note') {
+    const note = getNote(targetId);
+    if (!note || note.notebook_id !== notebookId) throw new Error('Note target not found in notebook');
+    return;
+  }
+  throw new Error('Invalid target type');
+}
 export function createLink(notebookId: string, fromId: string, fromType: string, toId: string, toType: string): Link {
+  requireNotebook(notebookId);
+  requireTargetInNotebook(notebookId, fromId, fromType);
+  requireTargetInNotebook(notebookId, toId, toType);
   const id = uuid();
   getDb().prepare('INSERT OR IGNORE INTO links (id, notebook_id, from_id, from_type, to_id, to_type) VALUES (?, ?, ?, ?, ?, ?)').run(id, notebookId, fromId, fromType, toId, toType);
-  return getDb().prepare('SELECT * FROM links WHERE id = ?').get(id) as Link;
+  return getDb().prepare('SELECT * FROM links WHERE id = ? OR (from_id = ? AND to_id = ?)').get(id, fromId, toId) as Link;
 }
 export function deleteLink(id: string): void {
   getDb().prepare('DELETE FROM links WHERE id = ?').run(id);
@@ -125,11 +176,16 @@ export function listNotes(notebookId: string): Note[] {
   return getDb().prepare('SELECT * FROM notes WHERE notebook_id = ? ORDER BY updated_at DESC').all(notebookId) as Note[];
 }
 export function createNote(notebookId: string, title = 'Untitled', content = '', folderId?: string): Note {
+  requireNotebook(notebookId);
+  if (folderId) requireFolderInNotebook(folderId, notebookId);
   const id = uuid();
   getDb().prepare('INSERT INTO notes (id, notebook_id, title, content, folder_id) VALUES (?, ?, ?, ?, ?)').run(id, notebookId, title, content, folderId ?? null);
   return getDb().prepare('SELECT * FROM notes WHERE id = ?').get(id) as Note;
 }
 export function updateNote(id: string, title?: string, content?: string, folderId?: string | null): void {
+  const note = getNote(id);
+  if (!note) throw new Error('Note not found');
+  if (folderId) requireFolderInNotebook(folderId, note.notebook_id);
   if (title !== undefined) getDb().prepare("UPDATE notes SET title = ?, updated_at = datetime('now') WHERE id = ?").run(title, id);
   if (content !== undefined) getDb().prepare("UPDATE notes SET content = ?, updated_at = datetime('now') WHERE id = ?").run(content, id);
   if (folderId !== undefined) getDb().prepare('UPDATE notes SET folder_id = ? WHERE id = ?').run(folderId, id);

@@ -13,6 +13,10 @@ export async function POST(req: Request) {
   if (!notebookId || !name) {
     return NextResponse.json({ error: 'notebookId and name required' }, { status: 400 });
   }
-  const folder = queries.createFolder(notebookId, name, parentId);
-  return NextResponse.json(folder);
+  try {
+    const folder = queries.createFolder(notebookId, name, parentId);
+    return NextResponse.json(folder);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid folder' }, { status: 400 });
+  }
 }

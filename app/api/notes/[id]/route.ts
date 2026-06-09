@@ -17,8 +17,12 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const { title, content, folderId } = await req.json();
-  queries.updateNote(id, title, content, folderId);
-  return NextResponse.json({ success: true });
+  try {
+    queries.updateNote(id, title, content, folderId);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid note' }, { status: 400 });
+  }
 }
 
 export async function DELETE(

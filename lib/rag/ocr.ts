@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+const MAX_PDF_PARSE_BYTES = 50 * 1024 * 1024;
+
 export async function ocrImage(imagePath: string): Promise<string> {
   console.log(`[ocr] Starting OCR on ${imagePath}...`);
 
@@ -34,15 +36,18 @@ export async function ocrImage(imagePath: string): Promise<string> {
   }
 }
 
-export async function parsePdfWithOcrFallback(filepath: string): Promise<string> {
+export async function parsePdfText(filepath: string): Promise<string> {
   const pdfParse = (await import('pdf-parse')).default;
+  const stat = fs.statSync(filepath);
+  if (stat.size > MAX_PDF_PARSE_BYTES) {
+    throw new Error('PDF exceeds 50MB text extraction limit; split it into smaller PDFs before uploading.');
+  }
   const buffer = fs.readFileSync(filepath);
   const data = await pdfParse(buffer);
 
-  if (data.text && data.text.trim().length > 100) {
+  if (data.text?.trim()) {
     return data.text;
   }
 
-  console.log('[ocr] PDF has sparse text, may be scanned');
-  return data.text || '';
+  throw new Error('PDF appears to be scanned or image-only. OCR for scanned PDFs is not available yet; convert pages to images or upload a text-based PDF.');
 }

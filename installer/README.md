@@ -1,6 +1,6 @@
 # Memorwise
 
-A local, open-source alternative to NotebookLM. Chat with your PDFs, images, audio, video, URLs, and YouTube links using any LLM provider — everything stays on your machine.
+A local, open-source alternative to NotebookLM. Chat with PDFs, images, audio, video, URLs, and YouTube links using any LLM provider. Your data stays on your machine.
 
 ## Install and Run
 
@@ -8,7 +8,7 @@ A local, open-source alternative to NotebookLM. Chat with your PDFs, images, aud
 npx memorwise
 ```
 
-That's it. This clones the repo, installs dependencies, fires up the dev server, and opens your browser.
+That's it. The installer clones the repo, installs dependencies, starts the dev server, and opens your browser.
 
 ## Already Installed?
 
@@ -20,10 +20,20 @@ cd memorwise && npm run dev
 
 If Memorwise is already on your machine, `npx memorwise` detects it and starts the server directly.
 
+By default it also pulls the latest GitHub changes before starting. Use `--no-update` if you want to run the copy you already have.
+
 ## Custom Directory
 
 ```bash
 npx memorwise my-research
+```
+
+## Options
+
+```bash
+npx memorwise --port 5000
+npx memorwise --no-open
+npx memorwise --no-update
 ```
 
 ## What You Get
@@ -37,7 +47,7 @@ npx memorwise my-research
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22.13+ or 24+
 - git
 
 ## Links

@@ -6,6 +6,7 @@ Then: python scripts/kokoro-server.py
 """
 
 import io
+import os
 import sys
 import json
 import soundfile as sf
@@ -25,6 +26,9 @@ except ImportError:
     sys.exit(1)
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024
+
+MAX_TEXT_CHARS = int(os.environ.get('KOKORO_MAX_TEXT_CHARS', '24000'))
 
 # Cache pipelines per language
 pipelines = {}
@@ -55,6 +59,18 @@ DEFAULT_VOICES = [
 ]
 
 
+def read_tts_payload():
+    if not request.is_json:
+        return None, (jsonify({'error': 'JSON body is required'}), 400)
+    data = request.get_json(silent=True) or {}
+    text = data.get('text', '')
+    if not isinstance(text, str) or not text.strip():
+        return None, (jsonify({'error': 'text is required'}), 400)
+    if len(text) > MAX_TEXT_CHARS:
+        return None, (jsonify({'error': f'text exceeds {MAX_TEXT_CHARS} character limit'}), 413)
+    return data, None
+
+
 def get_pipeline(lang_code='a'):
     if lang_code not in pipelines:
         print(f"[kokoro] Loading pipeline for lang_code={lang_code}...")
@@ -75,13 +91,12 @@ def voices():
 
 @app.route('/tts', methods=['POST'])
 def tts():
-    data = request.json
+    data, error = read_tts_payload()
+    if error:
+        return error
     text = data.get('text', '')
     voice = data.get('voice', 'af_heart')
     lang = data.get('lang', 'en-us')
-
-    if not text:
-        return jsonify({'error': 'text is required'}), 400
 
     lang_code = LANG_CODES.get(lang, 'a')
 
@@ -112,13 +127,12 @@ def tts():
 @app.route('/tts/stream', methods=['POST'])
 def tts_stream():
     """Generate TTS and return as MP3 base64 for browser playback."""
-    data = request.json
+    data, error = read_tts_payload()
+    if error:
+        return error
     text = data.get('text', '')
     voice = data.get('voice', 'af_heart')
     lang = data.get('lang', 'en-us')
-
-    if not text:
-        return jsonify({'error': 'text is required'}), 400
 
     lang_code = LANG_CODES.get(lang, 'a')
 
@@ -153,11 +167,12 @@ def tts_stream():
 
 
 if __name__ == '__main__':
-    print("[kokoro] Starting Kokoro TTS server on http://localhost:8787")
+    host = os.environ.get('KOKORO_HOST', '127.0.0.1')
+    print(f"[kokoro] Starting Kokoro TTS server on http://{host}:8787")
     print("[kokoro] Voices:", len(DEFAULT_VOICES), "available")
     print("[kokoro] Languages: en-us, en-gb, es, fr, hi, it, ja, pt-br, zh")
 
     # Pre-load English pipeline
     get_pipeline('a')
 
-    app.run(host='0.0.0.0', port=8787, debug=False)
+    app.run(host=host, port=8787, debug=False)

@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 PORT=4747
 URL="http://localhost:$PORT"
+VERSION="$(node -e "console.log(require(process.argv[1]).version)" "$PROJECT_DIR/package.json" 2>/dev/null || echo "0.0.0")"
 
 # Colors
 c_reset='\033[0m'
@@ -92,9 +93,9 @@ LAUNCHER
   <key>CFBundleDisplayName</key>
   <string>Memorwise</string>
   <key>CFBundleVersion</key>
-  <string>1.0.8</string>
+  <string>$VERSION</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.8</string>
+  <string>$VERSION</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundlePackageType</key>

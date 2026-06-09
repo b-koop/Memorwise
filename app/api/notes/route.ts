@@ -13,6 +13,10 @@ export async function POST(req: Request) {
   if (!notebookId) {
     return NextResponse.json({ error: 'notebookId required' }, { status: 400 });
   }
-  const note = queries.createNote(notebookId, title, content, folderId);
-  return NextResponse.json(note);
+  try {
+    const note = queries.createNote(notebookId, title, content, folderId);
+    return NextResponse.json(note);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Invalid note' }, { status: 400 });
+  }
 }
