@@ -165,7 +165,7 @@ The app automatically starts the server if it's not already running, waits for i
 
 ---
 
-## MCP Server (Claude Code / Cursor)
+## MCP Server (Claude Code / Cursor / Codex)
 
 Memorwise ships with an MCP server so AI coding assistants can read, search, and interact with your notebooks directly.
 
@@ -193,7 +193,160 @@ Memorwise ships with an MCP server so AI coding assistants can read, search, and
 }
 ```
 
+**Codex** — add to `~/.codex/config.toml`:
+```toml
+[mcp_servers.memorwise]
+command = "node"
+args = ["/path/to/memorwise/mcp-server.js"]
+```
+
 No extra setup — it uses `node` directly with the project's TypeScript compiler.
+
+**Transport options:** The MCP server defaults to the legacy `Content-Length` stdio framing. If your MCP client uses newline-delimited JSON stdio, add an environment variable to the server config:
+
+```json
+"env": {
+  "MEMORWISE_MCP_STDIO_TRANSPORT": "newline"
+}
+```
+
+Accepted values are `content-length` (default), `newline`, and `auto`. GUI clients that do not inherit your shell PATH can also set `command` to an absolute Node.js 22.13+ or 24+ binary.
+
+### Troubleshooting MCP connections
+
+Use this bottom-up loop when Memorwise does not appear in Cursor, Codex, Claude Code, or another MCP client. These commands assume fish shell and a local checkout at `/Users/benjaminkoop/code/ai/Memorwise`; replace that path if your checkout lives elsewhere.
+
+#### 1. Set known-good local variables
+
+```fish
+set -gx MEMORWISE_ROOT /Users/benjaminkoop/code/ai/Memorwise
+set -gx NODE_BIN (command -v node)
+
+echo $MEMORWISE_ROOT
+echo $NODE_BIN
+$NODE_BIN -v
+
+test -f "$MEMORWISE_ROOT/mcp-server.js"; and echo "mcp-server.js OK"; or echo "Missing mcp-server.js"
+$NODE_BIN -e 'const [M,m]=process.versions.node.split(".").map(Number); process.exit(((M===22&&m>=13)||M>=24)?0:1)'; and echo "Node version OK"; or echo "Node version BAD"
+```
+
+Expected: `mcp-server.js OK` and `Node version OK`. Memorwise requires Node.js 22.13+ or 24+. If Node is bad, fix Node first. GUI clients often do not inherit your shell `PATH`, so use the absolute `$NODE_BIN` value in MCP client config rather than just `"node"`.
+
+#### 2. Check dependencies
+
+```fish
+cd "$MEMORWISE_ROOT"
+npm ls --depth 0 typescript better-sqlite3
+```
+
+If modules are missing, install dependencies:
+
+```fish
+cd "$MEMORWISE_ROOT"
+npm install
+```
+
+If errors mention `better-sqlite3` native bindings, rebuild it:
+
+```fish
+cd "$MEMORWISE_ROOT"
+npm rebuild better-sqlite3
+```
+
+#### 3. Smoke test Content-Length stdio
+
+Run `tools/list` directly against the MCP server without involving Cursor or Codex:
+
+```fish
+set init '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"manual-smoke","version":"1"}}}'
+set tools '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+set tmp (mktemp -d)
+
+begin
+  printf 'Content-Length: %d\r\n\r\n%s' (string length -- $init) $init
+  printf 'Content-Length: %d\r\n\r\n%s' (string length -- $tools) $tools
+end | env MEMORWISE_DATA_DIR="$tmp" MEMORWISE_MCP_STDIO_TRANSPORT=content-length "$NODE_BIN" "$MEMORWISE_ROOT/mcp-server.js" > /tmp/memorwise-mcp.out 2> /tmp/memorwise-mcp.err
+
+grep -q 'memorwise_list_notebooks' /tmp/memorwise-mcp.out; and echo "Content-Length MCP OK"; or begin echo "Content-Length MCP FAILED"; cat /tmp/memorwise-mcp.err; end
+
+rm -rf "$tmp"
+```
+
+Expected: `Content-Length MCP OK`; stderr should contain `Server started (35 tools, content-length stdio)` and no parse errors. If this fails, fix the Memorwise server/runtime layer before changing client config.
+
+#### 4. Smoke test newline-delimited stdio
+
+```fish
+set tmp (mktemp -d)
+
+printf '%s\n%s\n' $init $tools | env MEMORWISE_DATA_DIR="$tmp" MEMORWISE_MCP_STDIO_TRANSPORT=newline "$NODE_BIN" "$MEMORWISE_ROOT/mcp-server.js" > /tmp/memorwise-mcp-newline.out 2> /tmp/memorwise-mcp-newline.err
+
+grep -q 'memorwise_list_notebooks' /tmp/memorwise-mcp-newline.out; and echo "Newline MCP OK"; or begin echo "Newline MCP FAILED"; cat /tmp/memorwise-mcp-newline.err; end
+
+rm -rf "$tmp"
+```
+
+Choose the client transport from the smoke-test result:
+
+- Both pass: the remaining issue is likely client config, client lifecycle, or client logs.
+- Only newline passes: set `MEMORWISE_MCP_STDIO_TRANSPORT` to `newline`.
+- Only Content-Length passes: set `MEMORWISE_MCP_STDIO_TRANSPORT` to `content-length`.
+- Unsure: set `MEMORWISE_MCP_STDIO_TRANSPORT` to `auto`.
+
+#### 5. Use absolute paths in client configs
+
+For Cursor:
+
+```json
+{
+  "mcpServers": {
+    "memorwise": {
+      "command": "/absolute/path/to/node",
+      "args": ["/Users/benjaminkoop/code/ai/Memorwise/mcp-server.js"],
+      "env": {
+        "MEMORWISE_MCP_STDIO_TRANSPORT": "auto"
+      }
+    }
+  }
+}
+```
+
+For Codex:
+
+```toml
+[mcp_servers.memorwise]
+command = "/absolute/path/to/node"
+args = ["/Users/benjaminkoop/code/ai/Memorwise/mcp-server.js"]
+
+[mcp_servers.memorwise.env]
+MEMORWISE_MCP_STDIO_TRANSPORT = "auto"
+```
+
+Replace `/absolute/path/to/node` with:
+
+```fish
+command -v node
+```
+
+For pi: pi does not have built-in MCP support. Plain pi will not connect to Memorwise MCP. If you use a pi MCP extension/package, troubleshoot that extension with the same absolute `command`, `args`, and `env` values above.
+
+Do not set `MEMORWISE_MCP_ALLOW_STDOUT_LOGS=1` in MCP client config. MCP stdout must remain protocol-only.
+
+#### 6. Restart and verify the client
+
+After changing MCP config:
+
+1. Quit the client completely.
+2. Reopen it.
+3. Confirm the `memorwise` MCP server is not marked failed.
+4. Inspect MCP logs if it still fails.
+5. Verify the client lists tools including `memorwise_list_notebooks`, `memorwise_get_settings`, and `memorwise_search`.
+6. Call `memorwise_get_settings`; it should return provider/model/dataDir JSON.
+7. Call `memorwise_list_notebooks`; an empty array is OK.
+
+A resolved connection has no repeated stderr errors such as `Cannot find module`, `Parse error`, `bad Content-Length`, Node version failures, or `better-sqlite3` native binding errors.
+
+Repeat the loop from the first failing layer: Content-Length smoke test → newline smoke test → fix one layer → restart client → list tools → call `memorwise_get_settings` → call `memorwise_list_notebooks`.
 
 **35 tools across 12 categories:**
 

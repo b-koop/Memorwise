@@ -1,321 +1,521 @@
 #!/usr/bin/env node
 /**
- * Memorwise MCP Server
+ * Memorwise MCP Server (Streamable HTTP)
  *
- * Exposes Memorwise's full functionality as MCP tools.
- * Works with Claude Code, Cursor, Codex, or any MCP-compatible client.
+ * Exposes Memorwise's full functionality as MCP tools over the Streamable HTTP
+ * transport, the current MCP standard. Built on the official
+ * @modelcontextprotocol/sdk.
  *
  * Usage:
- *   node mcp-server.js
+ *   node mcp-server.js            # listens on http://localhost:4748/mcp
+ *   MCP_PORT=5000 node mcp-server.js
  *
- * Claude Code (~/.claude/settings.json):
- *   "mcpServers": { "memorwise": { "command": "node", "args": ["/path/to/memorwise/mcp-server.js"] } }
+ * Client config (pi / Cursor / Claude Code / Codex):
+ *   { "mcpServers": { "memorwise": { "url": "http://localhost:4748/mcp" } } }
  *
- * Cursor (.cursor/mcp.json):
- *   "mcpServers": { "memorwise": { "command": "node", "args": ["/path/to/memorwise/mcp-server.js"] } }
+ * Requires the server to be running independently (e.g. `npm run mcp`).
  */
 
-// Bootstrap: register tsconfig paths so imports like @/* work
-const path = require('path');
-const Module = require('module');
+// ─── Bootstrap: register tsconfig paths + TS transpiler ───────────────────
+const path = require("path");
+const http = require("http");
+const crypto = require("crypto");
+const Module = require("module");
 
 // Set cwd to the project root so all relative imports work
 const PROJECT_ROOT = __dirname;
 process.chdir(PROJECT_ROOT);
 
 // Register TypeScript transpiler so we can require .ts files directly
-const ts = require('typescript');
+const ts = require("typescript");
 const tsCompilerOptions = {
-  module: ts.ModuleKind.CommonJS,
-  target: ts.ScriptTarget.ES2017,
-  esModuleInterop: true,
-  resolveJsonModule: true,
-  jsx: ts.JsxEmit.React,
-  strict: false,
+	module: ts.ModuleKind.CommonJS,
+	target: ts.ScriptTarget.ES2017,
+	esModuleInterop: true,
+	resolveJsonModule: true,
+	jsx: ts.JsxEmit.React,
+	strict: false,
 };
-require.extensions['.ts'] = function (module, filename) {
-  const code = require('fs').readFileSync(filename, 'utf-8');
-  const result = ts.transpileModule(code, { compilerOptions: tsCompilerOptions, fileName: filename });
-  module._compile(result.outputText, filename);
+require.extensions[".ts"] = (module, filename) => {
+	const code = require("fs").readFileSync(filename, "utf-8");
+	const result = ts.transpileModule(code, {
+		compilerOptions: tsCompilerOptions,
+		fileName: filename,
+	});
+	module._compile(result.outputText, filename);
 };
-require.extensions['.tsx'] = require.extensions['.ts'];
+require.extensions[".tsx"] = require.extensions[".ts"];
 
 // Register @/* path alias
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, parent, isMain, options) {
-  if (request.startsWith('@/')) {
-    request = path.join(PROJECT_ROOT, request.slice(2));
-  }
-  return originalResolve.call(this, request, parent, isMain, options);
+	if (request.startsWith("@/")) {
+		request = path.join(PROJECT_ROOT, request.slice(2));
+	}
+	return originalResolve.call(this, request, parent, isMain, options);
 };
 
-// ─── Now we can import project modules ───
+// ─── Now import project modules + MCP SDK ──────────────────────────────────
+const { z } = require("zod");
+const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
+const {
+	StreamableHTTPServerTransport,
+} = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
+const { isInitializeRequest } = require("@modelcontextprotocol/sdk/types.js");
 
-const queries = require('./lib/db/queries.ts');
-const appPackage = require('./package.json');
-const generate = require('./lib/generate.ts');
-const { registry } = require('./lib/llm/provider-registry.ts');
-const { ingestSource } = require('./lib/rag/ingest.ts');
-const { retrieveContext } = require('./lib/rag/retrieve.ts');
-const { getDataDir, getSourceFilePath, sanitizeFilename } = require('./lib/paths.ts');
-const { removeNotebookSourcesDir, unlinkSourceFile } = require('./lib/source-files.ts');
-const fs = require('fs');
+const queries = require("./lib/db/queries.ts");
+const appPackage = require("./package.json");
+const generate = require("./lib/generate.ts");
+const { registry } = require("./lib/llm/provider-registry.ts");
+const { ingestSource } = require("./lib/rag/ingest.ts");
+const { retrieveContext } = require("./lib/rag/retrieve.ts");
+const {
+	getDataDir,
+	getSourceFilePath,
+	sanitizeFilename,
+} = require("./lib/paths.ts");
+const {
+	removeNotebookSourcesDir,
+	unlinkSourceFile,
+} = require("./lib/source-files.ts");
+const fs = require("fs");
 const MAX_MCP_TEXT_SOURCE_BYTES = 10 * 1024 * 1024;
 
 function readTextPrefix(filepath, maxBytes = 64 * 1024) {
-  const fd = fs.openSync(filepath, 'r');
-  try {
-    const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs.readSync(fd, buffer, 0, maxBytes, 0);
-    return buffer.subarray(0, bytesRead).toString('utf8');
-  } finally {
-    fs.closeSync(fd);
-  }
+	const fd = fs.openSync(filepath, "r");
+	try {
+		const buffer = Buffer.alloc(maxBytes);
+		const bytesRead = fs.readSync(fd, buffer, 0, maxBytes, 0);
+		return buffer.subarray(0, bytesRead).toString("utf8");
+	} finally {
+		fs.closeSync(fd);
+	}
 }
 
-// ─── Tool Definitions ───
-
-const TOOLS = [
-  // Notebooks
-  { name: 'memorwise_list_notebooks', description: 'List all notebooks', inputSchema: { type: 'object', properties: {} } },
-  { name: 'memorwise_create_notebook', description: 'Create a new notebook', inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Notebook name' }, description: { type: 'string', description: 'Optional description' } }, required: ['name'] } },
-  { name: 'memorwise_delete_notebook', description: 'Delete a notebook and all its data', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_get_notebook', description: 'Get notebook details', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-
-  // Sources
-  { name: 'memorwise_list_sources', description: 'List sources in a notebook with status and chunk count', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_add_url_source', description: 'Add a URL or YouTube video as a source (auto-extracts and indexes)', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, url: { type: 'string', description: 'Web URL or YouTube URL' } }, required: ['notebookId', 'url'] } },
-  { name: 'memorwise_add_text_source', description: 'Add raw text as a source', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, filename: { type: 'string', description: 'Name for source' }, content: { type: 'string', description: 'Text content' } }, required: ['notebookId', 'filename', 'content'] } },
-  { name: 'memorwise_delete_source', description: 'Delete a source and its embeddings', inputSchema: { type: 'object', properties: { sourceId: { type: 'string' } }, required: ['sourceId'] } },
-  { name: 'memorwise_get_source_content', description: 'Get extracted text of a source', inputSchema: { type: 'object', properties: { sourceId: { type: 'string' } }, required: ['sourceId'] } },
-
-  // Chat / RAG
-  { name: 'memorwise_chat', description: 'Ask a question about documents using RAG with citations', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, question: { type: 'string' }, sourceId: { type: 'string', description: 'Optional: focus on one source' } }, required: ['notebookId', 'question'] } },
-  { name: 'memorwise_get_context', description: 'Get raw document context from a notebook', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, maxChars: { type: 'number', description: 'Max chars (default 5000)' } }, required: ['notebookId'] } },
-  { name: 'memorwise_search', description: 'Search across sources, notes, and messages', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, query: { type: 'string' } }, required: ['notebookId', 'query'] } },
-
-  // Notes
-  { name: 'memorwise_list_notes', description: 'List notes in a notebook', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_create_note', description: 'Create a note', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string', description: 'Markdown content' } }, required: ['notebookId', 'title'] } },
-  { name: 'memorwise_update_note', description: 'Update a note', inputSchema: { type: 'object', properties: { noteId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' } }, required: ['noteId'] } },
-  { name: 'memorwise_delete_note', description: 'Delete a note', inputSchema: { type: 'object', properties: { noteId: { type: 'string' } }, required: ['noteId'] } },
-  { name: 'memorwise_get_note', description: 'Get a note with full content', inputSchema: { type: 'object', properties: { noteId: { type: 'string' } }, required: ['noteId'] } },
-
-  // Generate
-  { name: 'memorwise_generate_summary', description: 'AI summary of all sources', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_generate_quiz', description: 'Generate a multiple-choice quiz', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, count: { type: 'number', description: 'Number of questions (default 10)' } }, required: ['notebookId'] } },
-  { name: 'memorwise_generate_flashcards', description: 'Generate flashcards', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_generate_study_guide', description: 'Generate a study guide (saved as a note)', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_generate_suggestions', description: 'Suggest questions to ask about documents', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-
-  // Tags
-  { name: 'memorwise_list_tags', description: 'List tags', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_create_tag', description: 'Create a tag', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, name: { type: 'string' }, color: { type: 'string' } }, required: ['notebookId', 'name'] } },
-  { name: 'memorwise_assign_tag', description: 'Assign tag to a source or note', inputSchema: { type: 'object', properties: { tagId: { type: 'string' }, targetId: { type: 'string' }, targetType: { type: 'string', enum: ['source', 'note'] } }, required: ['tagId', 'targetId', 'targetType'] } },
-
-  // Folders
-  { name: 'memorwise_list_folders', description: 'List folders', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_create_folder', description: 'Create a folder', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, name: { type: 'string' }, parentId: { type: 'string' } }, required: ['notebookId', 'name'] } },
-
-  // Chat History
-  { name: 'memorwise_list_chat_sessions', description: 'List chat sessions', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-  { name: 'memorwise_get_chat_history', description: 'Get full chat history', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] } },
-
-  // Generations
-  { name: 'memorwise_list_generations', description: 'List saved generations (quizzes, flashcards, etc.)', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' }, type: { type: 'string', description: 'Filter: quiz, flashcards, summary, study-guide' } }, required: ['notebookId'] } },
-
-  // Settings
-  { name: 'memorwise_get_settings', description: 'Get current settings (provider, model, etc.)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'memorwise_set_provider', description: 'Set active LLM provider', inputSchema: { type: 'object', properties: { provider: { type: 'string', enum: ['ollama', 'openai', 'anthropic', 'gemini', 'groq', 'mistral', 'openrouter', 'lmstudio'] } }, required: ['provider'] } },
-  { name: 'memorwise_set_model', description: 'Set active chat model', inputSchema: { type: 'object', properties: { model: { type: 'string' } }, required: ['model'] } },
-
-  // Knowledge Graph
-  { name: 'memorwise_get_knowledge_graph', description: 'Get knowledge graph with concepts and connections', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-
-  // Export
-  { name: 'memorwise_export_notebook', description: 'Export full notebook data', inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] } },
-];
-
-// ─── Tool Handler ───
-
-async function handleTool(name, args) {
-  switch (name) {
-    case 'memorwise_list_notebooks': return queries.listNotebooks();
-    case 'memorwise_create_notebook': return queries.createNotebook(args.name, args.description || '');
-    case 'memorwise_delete_notebook': {
-      const nb = queries.getNotebook(args.notebookId);
-      if (nb) {
-        const { deleteNotebookTable } = require('./lib/rag/vectorstore.ts');
-        await deleteNotebookTable(args.notebookId);
-        removeNotebookSourcesDir(args.notebookId);
-        queries.deleteNotebook(args.notebookId);
-      }
-      return { success: true };
-    }
-    case 'memorwise_get_notebook': return queries.getNotebook(args.notebookId) || { error: 'Not found' };
-
-    case 'memorwise_list_sources': return queries.listSources(args.notebookId);
-    case 'memorwise_add_url_source': {
-      const { extractFromUrl } = require('./lib/rag/web-extract.ts');
-      if (!queries.getNotebook(args.notebookId)) throw new Error('Notebook not found');
-      const ex = await extractFromUrl(args.url);
-      const safeTitle = ex.title.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50) || 'url-source';
-      const fp = getSourceFilePath(args.notebookId, `${safeTitle}.txt`);
-      fs.writeFileSync(fp, ex.text, { flag: 'wx' });
-      const src = queries.createSource(args.notebookId, ex.title, fp, 'txt', ex.text.length, ex.sourceType);
-      ingestSource(src.id, args.notebookId, fp, 'txt', ex.sourceType);
-      return { id: src.id, filename: src.filename, status: 'processing', message: 'Indexing started' };
-    }
-    case 'memorwise_add_text_source': {
-      if (!queries.getNotebook(args.notebookId)) throw new Error('Notebook not found');
-      if (Buffer.byteLength(args.content, 'utf8') > MAX_MCP_TEXT_SOURCE_BYTES) throw new Error('Text source exceeds 10MB limit');
-      const safeFilename = sanitizeFilename(args.filename);
-      const fp = getSourceFilePath(args.notebookId, safeFilename);
-      fs.writeFileSync(fp, args.content, { flag: 'wx' });
-      const ext = path.extname(safeFilename).slice(1) || 'txt';
-      const src = queries.createSource(args.notebookId, args.filename, fp, ext, args.content.length, 'file');
-      ingestSource(src.id, args.notebookId, fp, ext, 'file');
-      return { id: src.id, filename: src.filename, status: 'processing', message: 'Indexing started' };
-    }
-    case 'memorwise_delete_source': {
-      const s = queries.getSource(args.sourceId);
-      if (s) {
-        const { deleteSourceChunks } = require('./lib/rag/vectorstore.ts');
-        await deleteSourceChunks(s.notebook_id, args.sourceId);
-        unlinkSourceFile(s);
-        queries.deleteSource(args.sourceId);
-      }
-      return { success: true };
-    }
-    case 'memorwise_get_source_content': {
-      const s = queries.getSource(args.sourceId);
-      if (!s) return { error: 'Not found' };
-      try { return { filename: s.filename, type: s.source_type, summary: s.summary, content: readTextPrefix(s.filepath, 64 * 1024).slice(0, 10000) }; }
-      catch { return { filename: s.filename, summary: s.summary, content: '(not readable)' }; }
-    }
-
-    case 'memorwise_chat': {
-      let ctx = '', cites = [];
-      try { const r = await retrieveContext(args.notebookId, args.question, 8, args.sourceId); ctx = r.context; cites = r.citations; } catch {}
-      if (!ctx) {
-        ctx = generate.getNotebookContext(args.notebookId, 5000, args.sourceId);
-        cites = queries.listSources(args.notebookId)
-          .filter(s => (s.status === 'ready' || s.status === 'error') && (!args.sourceId || s.id === args.sourceId))
-          .map(s => ({ filename: s.filename }));
-      }
-      if (!ctx) return { answer: 'No documents in this notebook.', citations: [] };
-      const answer = await registry.getActiveProvider().generate({ model: registry.getActiveChatModel(), messages: [{ role: 'system', content: `Answer using document context. Cite with [1],[2].\n\nContext:\n${ctx}` }, { role: 'user', content: args.question }] });
-      return { answer, citations: [...new Map(cites.map(c => [c.filename, c])).values()] };
-    }
-    case 'memorwise_get_context': return { context: generate.getNotebookContext(args.notebookId, args.maxChars || 5000) };
-    case 'memorwise_search': {
-      const { getDb } = require('./lib/db/index.ts');
-      const db = getDb(); const like = `%${args.query}%`; const r = [];
-      db.prepare('SELECT id,filename,summary FROM sources WHERE notebook_id=? AND (filename LIKE ? OR summary LIKE ?) LIMIT 10').all(args.notebookId, like, like).forEach(s => r.push({ type: 'source', id: s.id, title: s.filename, snippet: (s.summary || '').slice(0, 150) }));
-      db.prepare('SELECT id,title,content FROM notes WHERE notebook_id=? AND (title LIKE ? OR content LIKE ?) LIMIT 10').all(args.notebookId, like, like).forEach(n => r.push({ type: 'note', id: n.id, title: n.title, snippet: (n.content || '').slice(0, 150) }));
-      return r;
-    }
-
-    case 'memorwise_list_notes': return queries.listNotes(args.notebookId);
-    case 'memorwise_create_note': return queries.createNote(args.notebookId, args.title, args.content || '');
-    case 'memorwise_update_note': queries.updateNote(args.noteId, args.title, args.content); return { success: true };
-    case 'memorwise_delete_note': queries.deleteNote(args.noteId); return { success: true };
-    case 'memorwise_get_note': return queries.getNote(args.noteId) || { error: 'Not found' };
-
-    case 'memorwise_generate_summary': {
-      const summary = await generate.generateNotebookSummary(args.notebookId);
-      queries.saveGeneration(args.notebookId, 'summary', 'Summary', summary);
-      return { summary };
-    }
-    case 'memorwise_generate_quiz': {
-      const ctx = generate.getNotebookContext(args.notebookId, 2500);
-      if (!ctx.trim()) return { error: 'No readable sources' };
-      const result = await registry.getActiveProvider().generate({ model: registry.getActiveChatModel(), messages: [{ role: 'system', content: `Generate ${args.count || 10} quiz questions. Return JSON array with "question","options"(4),"correctIndex"(0-3),"explanation".` }, { role: 'user', content: ctx }] });
-      const m = result.match(/\[[\s\S]*\]/); if (!m) return { error: 'Parse failed' };
-      const q = JSON.parse(m[0]); queries.saveGeneration(args.notebookId, 'quiz', `Quiz (${q.length})`, JSON.stringify(q)); return q;
-    }
-    case 'memorwise_generate_flashcards': {
-      const cards = await generate.generateFlashcards(args.notebookId);
-      queries.saveGeneration(args.notebookId, 'flashcards', `Flashcards (${cards.length})`, JSON.stringify(cards)); return cards;
-    }
-    case 'memorwise_generate_study_guide': {
-      const content = await generate.generateStudyGuide(args.notebookId);
-      const note = queries.createNote(args.notebookId, 'Study Guide', content);
-      queries.saveGeneration(args.notebookId, 'study-guide', 'Study Guide', content);
-      return { noteId: note.id, content };
-    }
-    case 'memorwise_generate_suggestions': return await generate.generateSuggestions(args.notebookId);
-
-    case 'memorwise_list_tags': return queries.listTags(args.notebookId);
-    case 'memorwise_create_tag': return queries.createTag(args.notebookId, args.name, args.color);
-    case 'memorwise_assign_tag': queries.assignTag(args.tagId, args.targetId, args.targetType); return { success: true };
-
-    case 'memorwise_list_folders': return queries.listFolders(args.notebookId);
-    case 'memorwise_create_folder': return queries.createFolder(args.notebookId, args.name, args.parentId);
-
-    case 'memorwise_list_chat_sessions': return queries.listChatSessions(args.notebookId);
-    case 'memorwise_get_chat_history': return queries.getMessages(args.sessionId);
-
-    case 'memorwise_list_generations': return queries.listGenerations(args.notebookId, args.type);
-
-    case 'memorwise_get_settings': return { provider: registry.getActiveProvider().id, chatModel: registry.getActiveChatModel(), embeddingModel: registry.getActiveEmbeddingModel(), embeddingProvider: registry.getEmbeddingProviderId(), transcription: registry.getTranscriptionProvider(), tts: registry.getTTSProvider(), dataDir: getDataDir() };
-    case 'memorwise_set_provider': registry.setActiveProvider(args.provider); return { success: true, provider: args.provider };
-    case 'memorwise_set_model': registry.setActiveChatModel(args.model); return { success: true, model: args.model };
-
-    case 'memorwise_get_knowledge_graph': return await queries.getGraphData(args.notebookId);
-    case 'memorwise_export_notebook': {
-      const nb = queries.getNotebook(args.notebookId); if (!nb) return { error: 'Not found' };
-      return { notebook: nb, sources: queries.listSources(args.notebookId), notes: queries.listNotes(args.notebookId), sessions: queries.listChatSessions(args.notebookId).map(s => ({ ...s, messages: queries.getMessages(s.id) })), tags: queries.listTags(args.notebookId), folders: queries.listFolders(args.notebookId), generations: queries.listGenerations(args.notebookId) };
-    }
-
-    default: throw new Error(`Unknown tool: ${name}`);
-  }
+// Wrap any result as MCP text content.
+function asText(result) {
+	return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 }
 
-// ─── MCP Protocol ───
+// ─── Build the MCP server + register tools ─────────────────────────────────
 
-function send(msg) {
-  const json = JSON.stringify(msg);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+function createServer() {
+	const server = new McpServer({
+		name: "memorwise",
+		version: appPackage.version,
+	});
+
+	server.tool("memorwise_list_notebooks", "List all notebooks", {}, async () =>
+		asText(await queries.listNotebooks()),
+	);
+
+	server.tool(
+		"memorwise_create_notebook",
+		"Create a new notebook",
+		{
+			name: z.string().describe("Notebook name"),
+			description: z.string().optional().describe("Optional description"),
+		},
+		async (args) =>
+			asText(queries.createNotebook(args.name, args.description || "")),
+	);
+
+	server.tool(
+		"memorwise_get",
+		"Get a notebook, source, or note by ID. Returns full details including content.",
+		{
+			type: z.enum(["notebook", "source", "note"]),
+			id: z.string().describe("The notebook, source, or note ID"),
+		},
+		async (args) => {
+			if (args.type === "notebook")
+				return asText(queries.getNotebook(args.id) || { error: "Not found" });
+			if (args.type === "source") {
+				const s = queries.getSource(args.id);
+				if (!s) return asText({ error: "Not found" });
+				try {
+					return asText({
+						filename: s.filename,
+						type: s.source_type,
+						summary: s.summary,
+						content: readTextPrefix(s.filepath, 64 * 1024).slice(0, 10000),
+					});
+				} catch {
+					return asText({
+						filename: s.filename,
+						summary: s.summary,
+						content: "(not readable)",
+					});
+				}
+			}
+			if (args.type === "note")
+				return asText(queries.getNote(args.id) || { error: "Not found" });
+			return asText({ error: "Invalid type — use notebook, source, or note" });
+		},
+	);
+
+	server.tool(
+		"memorwise_delete",
+		"Delete a notebook (and all its data), a source (and its embeddings), or a note.",
+		{
+			type: z.enum(["notebook", "source", "note"]),
+			id: z.string().describe("The notebook, source, or note ID"),
+		},
+		async (args) => {
+			if (args.type === "notebook") {
+				const nb = queries.getNotebook(args.id);
+				if (nb) {
+					const { deleteNotebookTable } = require("./lib/rag/vectorstore.ts");
+					await deleteNotebookTable(args.id);
+					removeNotebookSourcesDir(args.id);
+					queries.deleteNotebook(args.id);
+				}
+			} else if (args.type === "source") {
+				const s = queries.getSource(args.id);
+				if (s) {
+					const { deleteSourceChunks } = require("./lib/rag/vectorstore.ts");
+					await deleteSourceChunks(s.notebook_id, args.id);
+					unlinkSourceFile(s);
+					queries.deleteSource(args.id);
+				}
+			} else if (args.type === "note") {
+				queries.deleteNote(args.id);
+			} else {
+				return asText({
+					error: "Invalid type — use notebook, source, or note",
+				});
+			}
+			return asText({ success: true });
+		},
+	);
+
+	server.tool(
+		"memorwise_list_sources",
+		"List sources in a notebook with status and chunk count",
+		{ notebookId: z.string() },
+		async (args) => asText(queries.listSources(args.notebookId)),
+	);
+
+	server.tool(
+		"memorwise_add_source",
+		"Add a source to a notebook. Provide either a URL (web page or YouTube) or raw text content.",
+		{
+			notebookId: z.string(),
+			url: z
+				.string()
+				.optional()
+				.describe("Web URL or YouTube URL (provide this OR content, not both)"),
+			filename: z
+				.string()
+				.optional()
+				.describe("Name for text source (required when providing content)"),
+			content: z
+				.string()
+				.optional()
+				.describe("Raw text content (provide this OR url, not both)"),
+		},
+		async (args) => {
+			if (!queries.getNotebook(args.notebookId))
+				throw new Error("Notebook not found");
+			if (args.url) {
+				const { extractFromUrl } = require("./lib/rag/web-extract.ts");
+				const ex = await extractFromUrl(args.url);
+				const safeTitle =
+					ex.title.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50) || "url-source";
+				const fp = getSourceFilePath(args.notebookId, `${safeTitle}.txt`);
+				fs.writeFileSync(fp, ex.text, { flag: "wx" });
+				const src = queries.createSource(
+					args.notebookId,
+					ex.title,
+					fp,
+					"txt",
+					ex.text.length,
+					ex.sourceType,
+				);
+				ingestSource(src.id, args.notebookId, fp, "txt", ex.sourceType);
+				return asText({
+					id: src.id,
+					filename: src.filename,
+					status: "processing",
+					message: "Indexing started",
+				});
+			}
+			if (args.content) {
+				if (!args.filename)
+					throw new Error("filename is required when providing content");
+				if (Buffer.byteLength(args.content, "utf8") > MAX_MCP_TEXT_SOURCE_BYTES)
+					throw new Error("Text source exceeds 10MB limit");
+				const safeFilename = sanitizeFilename(args.filename);
+				const fp = getSourceFilePath(args.notebookId, safeFilename);
+				fs.writeFileSync(fp, args.content, { flag: "wx" });
+				const ext = path.extname(safeFilename).slice(1) || "txt";
+				const src = queries.createSource(
+					args.notebookId,
+					args.filename,
+					fp,
+					ext,
+					args.content.length,
+					"file",
+				);
+				ingestSource(src.id, args.notebookId, fp, ext, "file");
+				return asText({
+					id: src.id,
+					filename: src.filename,
+					status: "processing",
+					message: "Indexing started",
+				});
+			}
+			throw new Error("Provide either url or content");
+		},
+	);
+
+	server.tool(
+		"memorwise_list_notes",
+		"List notes in a notebook",
+		{ notebookId: z.string() },
+		async (args) => asText(queries.listNotes(args.notebookId)),
+	);
+
+	server.tool(
+		"memorwise_create_note",
+		"Create a note in a notebook",
+		{
+			notebookId: z.string(),
+			title: z.string(),
+			content: z.string().optional().describe("Markdown content"),
+		},
+		async (args) =>
+			asText(
+				queries.createNote(args.notebookId, args.title, args.content || ""),
+			),
+	);
+
+	server.tool(
+		"memorwise_update_note",
+		"Update a note's title and/or content",
+		{
+			noteId: z.string(),
+			title: z.string().optional(),
+			content: z.string().optional(),
+		},
+		async (args) => {
+			queries.updateNote(args.noteId, args.title, args.content);
+			return asText({ success: true });
+		},
+	);
+
+	server.tool(
+		"memorwise_chat",
+		"Ask a question about notebook documents using RAG with citations",
+		{
+			notebookId: z.string(),
+			question: z.string(),
+			sourceId: z.string().optional().describe("Optional: focus on one source"),
+		},
+		async (args) => {
+			let ctx = "",
+				cites = [];
+			try {
+				const r = await retrieveContext(
+					args.notebookId,
+					args.question,
+					8,
+					args.sourceId,
+				);
+				ctx = r.context;
+				cites = r.citations;
+			} catch {}
+			if (!ctx) {
+				ctx = generate.getNotebookContext(args.notebookId, 5000, args.sourceId);
+				cites = queries
+					.listSources(args.notebookId)
+					.filter(
+						(s) =>
+							(s.status === "ready" || s.status === "error") &&
+							(!args.sourceId || s.id === args.sourceId),
+					)
+					.map((s) => ({ filename: s.filename }));
+			}
+			if (!ctx)
+				return asText({
+					answer: "No documents in this notebook.",
+					citations: [],
+				});
+			const answer = await registry.getActiveProvider().generate({
+				model: registry.getActiveChatModel(),
+				messages: [
+					{
+						role: "system",
+						content: `Answer using document context. Cite with [1],[2].\n\nContext:\n${ctx}`,
+					},
+					{ role: "user", content: args.question },
+				],
+			});
+			return asText({
+				answer,
+				citations: [...new Map(cites.map((c) => [c.filename, c])).values()],
+			});
+		},
+	);
+
+	server.tool(
+		"memorwise_search",
+		"Search across sources and notes in a notebook",
+		{ notebookId: z.string(), query: z.string() },
+		async (args) => {
+			const { getDb } = require("./lib/db/index.ts");
+			const db = getDb();
+			const like = `%${args.query}%`;
+			const r = [];
+			db.prepare(
+				"SELECT id,filename,summary FROM sources WHERE notebook_id=? AND (filename LIKE ? OR summary LIKE ?) LIMIT 10",
+			)
+				.all(args.notebookId, like, like)
+				.forEach((s) =>
+					r.push({
+						type: "source",
+						id: s.id,
+						title: s.filename,
+						snippet: (s.summary || "").slice(0, 150),
+					}),
+				);
+			db.prepare(
+				"SELECT id,title,content FROM notes WHERE notebook_id=? AND (title LIKE ? OR content LIKE ?) LIMIT 10",
+			)
+				.all(args.notebookId, like, like)
+				.forEach((n) =>
+					r.push({
+						type: "note",
+						id: n.id,
+						title: n.title,
+						snippet: (n.content || "").slice(0, 150),
+					}),
+				);
+			return asText(r);
+		},
+	);
+
+	server.tool(
+		"memorwise_get_settings",
+		"Get current provider, model, and data-dir settings",
+		{},
+		async () =>
+			asText({
+				provider: registry.getActiveProvider().id,
+				chatModel: registry.getActiveChatModel(),
+				embeddingModel: registry.getActiveEmbeddingModel(),
+				embeddingProvider: registry.getEmbeddingProviderId(),
+				transcription: registry.getTranscriptionProvider(),
+				tts: registry.getTTSProvider(),
+				dataDir: getDataDir(),
+			}),
+	);
+
+	server.tool(
+		"memorwise_update_settings",
+		"Update provider and/or chat model",
+		{
+			provider: z.string().optional(),
+			model: z.string().optional(),
+		},
+		async (args) => {
+			if (args.provider) registry.setActiveProvider(args.provider);
+			if (args.model) registry.setActiveChatModel(args.model);
+			return asText({
+				success: true,
+				provider: registry.getActiveProvider().id,
+				chatModel: registry.getActiveChatModel(),
+			});
+		},
+	);
+
+	return server;
 }
 
-function handleRequest(req) {
-  if (req.method === 'initialize') {
-    send({ jsonrpc: '2.0', id: req.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'memorwise', version: appPackage.version } } });
-  } else if (req.method === 'notifications/initialized') {
-    // no response
-  } else if (req.method === 'tools/list') {
-    send({ jsonrpc: '2.0', id: req.id, result: { tools: TOOLS } });
-  } else if (req.method === 'tools/call') {
-    const { name, arguments: args } = req.params;
-    handleTool(name, args || {}).then(result => {
-      send({ jsonrpc: '2.0', id: req.id, result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } });
-    }).catch(err => {
-      send({ jsonrpc: '2.0', id: req.id, result: { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true } });
-    });
-  } else {
-    send({ jsonrpc: '2.0', id: req.id, error: { code: -32601, message: `Unknown method: ${req.method}` } });
-  }
+// ─── Streamable HTTP server (stateful sessions) ────────────────────────────
+
+const PORT = parseInt(process.env.MCP_PORT || "4748", 10);
+const SESSIONS = new Map(); // sessionId -> { server, transport }
+
+async function readBody(req) {
+	const chunks = [];
+	for await (const chunk of req) chunks.push(chunk);
+	return Buffer.concat(chunks).toString("utf8");
 }
 
-// ─── Stdio Transport ───
+const httpServer = http.createServer(async (req, res) => {
+	// Only handle POST (JSON-RPC), GET (SSE), DELETE (session close) at /mcp
+	if (!req.url || !req.url.split("?")[0].endsWith("/mcp")) {
+		res.writeHead(404).end("Not found");
+		return;
+	}
 
-let buffer = Buffer.alloc(0);
-process.stdin.on('data', (chunk) => {
-  buffer = Buffer.concat([buffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
-  while (true) {
-    const headerEnd = buffer.indexOf('\r\n\r\n');
-    if (headerEnd === -1) break;
-    const header = buffer.subarray(0, headerEnd).toString('ascii');
-    const match = header.match(/Content-Length:\s*(\d+)/i);
-    if (!match) { buffer = buffer.subarray(headerEnd + 4); continue; }
-    const len = parseInt(match[1]);
-    const bodyStart = headerEnd + 4;
-    if (buffer.length < bodyStart + len) break;
-    const body = buffer.subarray(bodyStart, bodyStart + len).toString('utf8');
-    buffer = buffer.subarray(bodyStart + len);
-    try { handleRequest(JSON.parse(body)); } catch (e) { process.stderr.write(`[memorwise-mcp] Parse error: ${e}\n`); }
-  }
+	try {
+		const sessionId = req.headers["mcp-session-id"];
+		const session = sessionId ? SESSIONS.get(sessionId) : undefined;
+
+		// POST carries JSON-RPC. Always pre-read the body (supported via the
+		// transport's parsedBody argument) so we can detect initialize requests.
+		if (req.method === "POST") {
+			let parsed;
+			try {
+				parsed = JSON.parse(await readBody(req));
+			} catch {
+				res.writeHead(400).end("Invalid JSON");
+				return;
+			}
+
+			const isInit =
+				isInitializeRequest(parsed) ||
+				(Array.isArray(parsed) && parsed.some((m) => isInitializeRequest(m)));
+
+			if (isInit) {
+				const holder = {};
+				const transport = new StreamableHTTPServerTransport({
+					sessionIdGenerator: () => crypto.randomUUID(),
+					onsessioninitialized: (sid) => {
+						SESSIONS.set(sid, holder.session);
+						process.stderr.write(`[memorwise-mcp] session ${sid} started\n`);
+					},
+				});
+				const server = createServer();
+				holder.session = { server, transport };
+				transport.onclose = () => {
+					if (transport.sessionId) SESSIONS.delete(transport.sessionId);
+				};
+				await server.connect(transport);
+				await transport.handleRequest(req, res, parsed);
+				return;
+			}
+
+			if (!session) {
+				if (sessionId) {
+					res.writeHead(404).end("Session not found. Re-initialize.");
+				} else {
+					res
+						.writeHead(400)
+						.end("No valid session. Send an initialize request first.");
+				}
+				return;
+			}
+			await session.transport.handleRequest(req, res, parsed);
+			return;
+		}
+
+		// GET (SSE stream) / DELETE (session teardown) — no body to parse.
+		if (!session) {
+			res.writeHead(404).end("Session not found. Re-initialize.");
+			return;
+		}
+		await session.transport.handleRequest(req, res);
+	} catch (err) {
+		process.stderr.write(`[memorwise-mcp] request error: ${err}\n`);
+		if (!res.headersSent) res.writeHead(500).end("Internal server error");
+	}
 });
 
-process.stderr.write('[memorwise-mcp] Server started (' + TOOLS.length + ' tools)\n');
+httpServer.listen(PORT, () => {
+	process.stderr.write(
+		`[memorwise-mcp] Streamable HTTP server listening on http://localhost:${PORT}/mcp\n`,
+	);
+});
