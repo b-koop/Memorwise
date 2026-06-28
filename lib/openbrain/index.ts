@@ -197,7 +197,6 @@ type Observation = string;
 
 type SetupState = {
 	credentialsSaved: boolean;
-	databaseReady: boolean;
 	connectorDeployed: boolean;
 	clientConfigured: boolean;
 };
@@ -206,7 +205,6 @@ type DashboardState = {
 	signedIn: boolean;
 	restrictedUnlocked: boolean;
 	selectedThoughtId?: string;
-	resolvedDuplicatePairs: number;
 };
 
 type IngestJob = {
@@ -240,14 +238,12 @@ class OpenBrainBehaviorModel {
 	private readonly observations = new Set<Observation>();
 	private readonly setup: SetupState = {
 		credentialsSaved: false,
-		databaseReady: false,
 		connectorDeployed: false,
 		clientConfigured: false,
 	};
 	private readonly dashboard: DashboardState = {
 		signedIn: false,
 		restrictedUnlocked: false,
-		resolvedDuplicatePairs: 0,
 	};
 	private readonly ingestJobs = new Map<string, IngestJob>();
 	private readonly memories = new Map<string, AgentMemory>();
@@ -450,7 +446,6 @@ class OpenBrainBehaviorModel {
 	}
 
 	completeDatabaseSetup(): void {
-		this.setup.databaseReady = true;
 		this.observe("Open Brain can store thoughts as text, metadata, and searchable vectors");
 		if (this.setup.credentialsSaved || this.setup.clientConfigured) {
 			this.observe("connected Open Brain tools can read and write thoughts with the configured access key");
@@ -590,7 +585,6 @@ class OpenBrainBehaviorModel {
 	}
 
 	resolveDuplicatePair(): void {
-		this.dashboard.resolvedDuplicatePairs += 1;
 		this.observe("the duplicate review records the user's resolution");
 		this.observe("future browsing no longer presents the resolved pair as unresolved");
 	}
