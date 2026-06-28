@@ -1,4 +1,7 @@
+import assert from "node:assert/strict";
 import { Given, Then, When } from "@cucumber/cucumber";
+import { createOpenBrain } from "../../../lib/openbrain";
+import type { OpenBrain, OpenBrainThought } from "../../../lib/openbrain";
 import "../support/openbrain-world";
 import type { OpenBrainWorld } from "../support/openbrain-world";
 
@@ -99,6 +102,88 @@ const actions = [
 	"the reviewer inspects a related recall trace",
 	"a future agent recalls memory for the same task",
 ];
+
+type EditedThoughtFixture = {
+	openBrain: OpenBrain;
+	originalText: string;
+	changedThought: OpenBrainThought;
+	recapturedThought?: OpenBrainThought;
+};
+
+const editedThoughts = new WeakMap<OpenBrainWorld, EditedThoughtFixture>();
+
+Given(
+	"the user has saved a thought that they later changed",
+	function (this: OpenBrainWorld) {
+		const openBrain = createOpenBrain();
+		const originalText = "Project Atlas prefers weekly planning notes";
+		const changedThought = openBrain.captureThought({
+			text: originalText,
+			type: "memory",
+			source: "dashboard",
+		});
+		const updated = openBrain.updateThought(changedThought.id, {
+			text: "Project Atlas prefers daily planning notes",
+		});
+		editedThoughts.set(this, {
+			openBrain,
+			originalText,
+			changedThought: updated,
+		});
+	},
+);
+
+When(
+	"the user saves the original thought again",
+	function (this: OpenBrainWorld) {
+		const fixture = editedThoughts.get(this);
+		assert.ok(fixture, "Expected an edited thought fixture");
+		fixture.recapturedThought = fixture.openBrain.captureThought({
+			text: fixture.originalText,
+			type: "memory",
+			source: "ai-client",
+		});
+	},
+);
+
+When("the user deletes the changed thought", function (this: OpenBrainWorld) {
+	const fixture = editedThoughts.get(this);
+	assert.ok(fixture, "Expected an edited thought fixture");
+	fixture.openBrain.deleteThought(fixture.changedThought.id);
+});
+
+Then(
+	"the original thought is still available as a separate memory",
+	function (this: OpenBrainWorld) {
+		const fixture = editedThoughts.get(this);
+		assert.ok(fixture, "Expected an edited thought fixture");
+		assert.ok(
+			fixture.recapturedThought,
+			"Expected the original thought to be saved again",
+		);
+		assert.notEqual(
+			fixture.recapturedThought.id,
+			fixture.changedThought.id,
+			"Expected the original text to be saved as a separate thought",
+		);
+
+		const savedOriginal = fixture.openBrain.getThought(
+			fixture.recapturedThought.id,
+			{ includeRestricted: true },
+		);
+		assert.equal(
+			savedOriginal?.text,
+			fixture.originalText,
+			"Expected the original thought to remain after deleting the changed thought",
+		);
+		assert.ok(
+			fixture.openBrain
+				.searchThoughts("weekly planning", { includeRestricted: true })
+				.some((result) => result.thought.id === fixture.recapturedThought?.id),
+			"Expected browsing or search to find the original thought",
+		);
+	},
+);
 
 const outcomes = [
 	"the operator has those credentials saved in a tracker they can use later in setup",

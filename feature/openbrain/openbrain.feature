@@ -111,6 +111,12 @@ Feature: Open Brain shared AI memory
       When the user confirms deletion for that thought
       Then the thought no longer appears in browse, search, or detail views
 
+    Scenario: User keeps the original thought after editing and removing the changed version
+      Given the user has saved a thought that they later changed
+      When the user saves the original thought again
+      And the user deletes the changed thought
+      Then the original thought is still available as a separate memory
+
   Rule: Restricted content stays hidden until deliberately unlocked
 
     Scenario: Restricted thoughts are hidden while the dashboard is locked

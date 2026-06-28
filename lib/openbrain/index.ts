@@ -91,6 +91,14 @@ export function createOpenBrain(
 	const byFingerprint = new Map<string, string>();
 	let nextId = 1;
 
+	const removeFingerprintEntriesFor = (id: string): void => {
+		for (const [fingerprint, indexedId] of byFingerprint) {
+			if (indexedId === id) {
+				byFingerprint.delete(fingerprint);
+			}
+		}
+	};
+
 	const clone = (thought: OpenBrainThought): OpenBrainThought => ({
 		...thought,
 		topics: [...thought.topics],
@@ -171,15 +179,16 @@ export function createOpenBrain(
 			if (!thought) {
 				throw new Error(`Thought not found: ${id}`);
 			}
+			if (patch.text !== undefined) {
+				removeFingerprintEntriesFor(id);
+				byFingerprint.set(normalize(patch.text), id);
+			}
 			Object.assign(thought, patch, { updatedAt: new Date() });
 			return clone(thought);
 		},
 
 		deleteThought(id) {
-			const thought = thoughts.get(id);
-			if (thought) {
-				byFingerprint.delete(normalize(thought.text));
-			}
+			removeFingerprintEntriesFor(id);
 			return thoughts.delete(id);
 		},
 
