@@ -78,8 +78,10 @@ const {
 	removeNotebookSourcesDir,
 	unlinkSourceFile,
 } = require("./lib/source-files.ts");
+const { createOpenBrain } = require("./lib/openbrain/index.ts");
 const fs = require("fs");
 const MAX_MCP_TEXT_SOURCE_BYTES = 10 * 1024 * 1024;
+const openBrain = createOpenBrain();
 
 function readTextPrefix(filepath, maxBytes = 64 * 1024) {
 	const fd = fs.openSync(filepath, "r");
@@ -104,6 +106,62 @@ function createServer() {
 		name: "memorwise",
 		version: appPackage.version,
 	});
+
+	server.tool(
+		"openbrain_capture_thought",
+		"Capture a local Open Brain thought",
+		{
+			text: z.string().describe("Thought text"),
+			title: z.string().optional().describe("Optional title"),
+			type: z
+				.enum(["note", "task", "decision", "memory", "evidence"])
+				.optional()
+				.describe("Thought type"),
+			topics: z.array(z.string()).optional().describe("Optional topics"),
+			source: z.string().optional().describe("Optional source label"),
+			restricted: z
+				.boolean()
+				.optional()
+				.describe("Whether the thought is restricted"),
+		},
+		async (args) => asText({ thought: openBrain.captureThought(args) }),
+	);
+
+	server.tool(
+		"openbrain_search_thoughts",
+		"Search local Open Brain thoughts",
+		{
+			query: z.string().describe("Search query"),
+			includeRestricted: z
+				.boolean()
+				.optional()
+				.describe("Whether to include restricted thoughts"),
+		},
+		async (args) =>
+			asText({
+				results: openBrain.searchThoughts(args.query, {
+					includeRestricted: args.includeRestricted,
+				}),
+			}),
+	);
+
+	server.tool(
+		"openbrain_get_thought",
+		"Get a local Open Brain thought by ID",
+		{
+			id: z.string().describe("Thought ID"),
+			includeRestricted: z
+				.boolean()
+				.optional()
+				.describe("Whether to include restricted thoughts"),
+		},
+		async (args) => {
+			const thought = openBrain.getThought(args.id, {
+				includeRestricted: args.includeRestricted,
+			});
+			return asText(thought ? { thought } : { error: "Not found" });
+		},
+	);
 
 	server.tool("memorwise_list_notebooks", "List all notebooks", {}, async () =>
 		asText(await queries.listNotebooks()),
@@ -443,7 +501,39 @@ async function readBody(req) {
 	return Buffer.concat(chunks).toString("utf8");
 }
 
+function isLocalHostHeader(host) {
+	if (!host) return false;
+	const normalized = String(Array.isArray(host) ? host[0] : host)
+		.trim()
+		.toLowerCase();
+	return (
+		normalized === "localhost" ||
+		normalized.startsWith("localhost:") ||
+		normalized === "127.0.0.1" ||
+		normalized.startsWith("127.0.0.1:") ||
+		normalized === "[::1]" ||
+		normalized.startsWith("[::1]:") ||
+		normalized === "::1"
+	);
+}
+
+function isLocalRemoteAddress(remoteAddress) {
+	return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(remoteAddress);
+}
+
 const httpServer = http.createServer(async (req, res) => {
+	if (
+		!isLocalHostHeader(req.headers.host) ||
+		!isLocalRemoteAddress(req.socket.remoteAddress)
+	) {
+		res
+			.writeHead(403)
+			.end(
+				"Memorwise MCP is local-only; connect via localhost, 127.0.0.1, or [::1].",
+			);
+		return;
+	}
+
 	// Only handle POST (JSON-RPC), GET (SSE), DELETE (session close) at /mcp
 	if (!req.url || !req.url.split("?")[0].endsWith("/mcp")) {
 		res.writeHead(404).end("Not found");
