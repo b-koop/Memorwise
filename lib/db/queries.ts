@@ -256,6 +256,74 @@ export function deleteNoteTemplate(id: string): void {
   getDb().prepare('DELETE FROM note_templates WHERE id = ?').run(id);
 }
 
+// --- OpenBrain Thoughts ---
+type OpenBrainThoughtRow = {
+  id: string;
+  title: string;
+  text: string;
+  type: string;
+  topics: string;
+  source: string | null;
+  scope: string | null;
+  restricted: number;
+  importance: number | null;
+  workflow_stage: string | null;
+  use_policy: string;
+  review_status: string;
+  created_at: string;
+  updated_at: string;
+};
+export function createOpenBrainThought(input: { text: string; title?: string; type?: string; topics?: string[]; source?: string; scope?: string; restricted?: boolean }): OpenBrainThoughtRow {
+  const id = uuid();
+  getDb().prepare('INSERT INTO openbrain_thoughts (id, title, text, type, topics, source, scope, restricted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, input.title ?? '', input.text, input.type ?? 'note', JSON.stringify(input.topics ?? []), input.source ?? null, input.scope ?? null, input.restricted ? 1 : 0);
+  return getDb().prepare('SELECT * FROM openbrain_thoughts WHERE id = ?').get(id) as OpenBrainThoughtRow;
+}
+export function getOpenBrainThought(id: string, options: { includeRestricted?: boolean } = {}): OpenBrainThoughtRow | undefined {
+  const row = getDb().prepare('SELECT * FROM openbrain_thoughts WHERE id = ?').get(id) as OpenBrainThoughtRow | undefined;
+  if (!row || (row.restricted && !options.includeRestricted)) return undefined;
+  return row;
+}
+export function listOpenBrainThoughts(options: { includeRestricted?: boolean; type?: string; reviewStatus?: string } = {}): OpenBrainThoughtRow[] {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (!options.includeRestricted) where.push('restricted = 0');
+  if (options.type) { where.push('type = ?'); params.push(options.type); }
+  if (options.reviewStatus) { where.push('review_status = ?'); params.push(options.reviewStatus); }
+  const clause = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+  return getDb().prepare(`SELECT * FROM openbrain_thoughts${clause} ORDER BY updated_at DESC`).all(...params) as OpenBrainThoughtRow[];
+}
+export function updateOpenBrainThought(id: string, patch: { title?: string; text?: string; type?: string; topics?: string[]; importance?: number; workflow_stage?: string }): OpenBrainThoughtRow {
+  if (!getOpenBrainThought(id, { includeRestricted: true })) throw new Error('Thought not found');
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (patch.title !== undefined) { sets.push('title = ?'); params.push(patch.title); }
+  if (patch.text !== undefined) { sets.push('text = ?'); params.push(patch.text); }
+  if (patch.type !== undefined) { sets.push('type = ?'); params.push(patch.type); }
+  if (patch.topics !== undefined) { sets.push('topics = ?'); params.push(JSON.stringify(patch.topics)); }
+  if (patch.importance !== undefined) { sets.push('importance = ?'); params.push(patch.importance); }
+  if (patch.workflow_stage !== undefined) { sets.push('workflow_stage = ?'); params.push(patch.workflow_stage); }
+  sets.push("updated_at = datetime('now')");
+  getDb().prepare(`UPDATE openbrain_thoughts SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+  return getOpenBrainThought(id, { includeRestricted: true }) as OpenBrainThoughtRow;
+}
+export function reviewOpenBrainThought(id: string, action: string): OpenBrainThoughtRow {
+  const outcomes: Record<string, { review_status: string; use_policy: string }> = {
+    confirm: { review_status: 'confirmed', use_policy: 'instruction' },
+    keep_evidence: { review_status: 'evidence_only', use_policy: 'evidence' },
+    reject: { review_status: 'rejected', use_policy: 'evidence' },
+  };
+  const outcome = outcomes[action];
+  if (!outcome) throw new Error(`Unknown review action: ${action}`);
+  if (!getOpenBrainThought(id, { includeRestricted: true })) throw new Error('Thought not found');
+  getDb().prepare("UPDATE openbrain_thoughts SET review_status = ?, use_policy = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(outcome.review_status, outcome.use_policy, id);
+  return getOpenBrainThought(id, { includeRestricted: true }) as OpenBrainThoughtRow;
+}
+export function deleteOpenBrainThought(id: string): void {
+  getDb().prepare('DELETE FROM openbrain_thoughts WHERE id = ?').run(id);
+}
+
 // --- Settings ---
 export function getSetting(key: string): string | null {
   const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

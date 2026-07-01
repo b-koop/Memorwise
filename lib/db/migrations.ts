@@ -107,6 +107,25 @@ export function runMigrations(db: Database.Database) {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS openbrain_thoughts (
+      id TEXT PRIMARY KEY,
+      title TEXT DEFAULT '',
+      text TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'note',
+      topics TEXT DEFAULT '[]',
+      source TEXT,
+      scope TEXT,
+      restricted INTEGER NOT NULL DEFAULT 0,
+      importance INTEGER,
+      workflow_stage TEXT,
+      use_policy TEXT NOT NULL DEFAULT 'evidence',
+      review_status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS note_templates (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
