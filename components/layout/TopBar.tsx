@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
@@ -19,14 +21,10 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { toast } from '@/components/ui/Toast';
 import { confirm } from '@/components/ui/ConfirmDialog';
 
-export type AppSection = 'notebooks' | 'brain';
-
-interface TopBarProps {
-  activeSection: AppSection;
-  onSectionChange: (section: AppSection) => void;
-}
-
-export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
+export function TopBar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isBrain = pathname.startsWith('/brain');
   const { notebooks, selectedNotebookId, selectNotebook, createNotebook, deleteNotebook } = useNotebookStore();
   const { loadSessions } = useChatStore();
   const { openSettings } = useSettingsStore();
@@ -54,7 +52,7 @@ export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
   useEffect(() => { if (isRenaming && renameRef.current) renameRef.current.focus(); }, [isRenaming]);
   useEffect(() => { if (isCreating && createRef.current) createRef.current.focus(); }, [isCreating]);
 
-  const handleSelectNotebook = async (id: string) => { setDropdownOpen(false); onSectionChange('notebooks'); await selectNotebook(id); await loadSessions(id); };
+  const handleSelectNotebook = async (id: string) => { setDropdownOpen(false); router.push('/'); await selectNotebook(id); await loadSessions(id); };
 
   const handleRename = async () => {
     const name = renameValue.trim();
@@ -104,25 +102,25 @@ export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
       {/* Left: Logo + Section links + Notebook name */}
       <div className="flex items-center gap-6">
         <img src="/logo-full.png" alt="Memorwise" className="h-[18px] logo-adaptive cursor-pointer"
-          onClick={() => { selectNotebook(null); onSectionChange('notebooks'); }} />
+          onClick={() => { selectNotebook(null); router.push('/'); }} />
 
         <nav className="flex items-center gap-1">
           {([
-            { key: 'notebooks', label: 'Notebooks' },
-            { key: 'brain', label: 'OpenBrain' },
+            { href: '/', label: 'Notebooks', active: !isBrain },
+            { href: '/brain', label: 'OpenBrain', active: isBrain },
           ] as const).map(section => (
-            <button key={section.key} onClick={() => onSectionChange(section.key)}
+            <Link key={section.href} href={section.href}
               className={`px-2.5 py-1 text-[12px] rounded-lg transition-colors ${
-                activeSection === section.key
+                section.active
                   ? 'bg-elevated text-foreground'
                   : 'text-foreground-muted hover:text-foreground-secondary hover:bg-elevated/50'
               }`}>
               {section.label}
-            </button>
+            </Link>
           ))}
         </nav>
 
-        {activeSection === 'notebooks' && selectedNotebook && (
+        {!isBrain && selectedNotebook && (
           isRenaming ? (
             <input ref={renameRef} type="text" value={renameValue}
               onChange={e => setRenameValue(e.target.value)}
@@ -141,7 +139,7 @@ export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
       {/* Right: Search + Dropdown + Create + Icons */}
       <div className="flex items-center gap-1.5">
         {/* Search */}
-        {selectedNotebookId && (
+        {!isBrain && selectedNotebookId && (
           <button onClick={() => window.dispatchEvent(new CustomEvent('memorwise:open-search'))}
             className="flex items-center gap-1.5 px-2.5 py-1 mr-1 text-[12px] text-foreground-muted hover:text-foreground-secondary bg-elevated/60 hover:bg-elevated border border-border/60 rounded-lg transition-colors"
             title="Search (Cmd+K)">
@@ -152,7 +150,7 @@ export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
         )}
 
         {/* Notebook switcher */}
-        <div className="relative" ref={dropdownRef}>
+        {!isBrain && <div className="relative" ref={dropdownRef}>
           <button onClick={() => setDropdownOpen(!dropdownOpen)} title="Switch notebook"
             className="p-1.5 rounded-lg hover:bg-elevated text-foreground-muted hover:text-foreground transition-colors">
             <ChevronDown size={14} />
@@ -189,32 +187,34 @@ export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </div>}
 
-        {/* Divider */}
-        <div className="w-px h-4 bg-border mx-0.5" />
+        {!isBrain && <>
+          {/* Divider */}
+          <div className="w-px h-4 bg-border mx-0.5" />
 
-        {/* Create */}
-        {isCreating ? (
-          <input ref={createRef} type="text" value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setIsCreating(false); setNewName(''); } }}
-            onBlur={handleCreate} placeholder="Name..."
-            className="w-24 px-2 py-0.5 text-[12px] bg-input border border-border rounded-md text-foreground placeholder:text-foreground-muted focus:ring-1 focus:ring-ring" />
-        ) : (
-          <button onClick={() => setIsCreating(true)}
-            className="flex items-center gap-1 px-2.5 py-1 text-[12px] font-medium text-foreground-secondary hover:text-foreground border border-border hover:border-border-hover rounded-lg hover:bg-elevated transition-colors">
-            <Plus size={13} />
-            Create
-          </button>
-        )}
+          {/* Create */}
+          {isCreating ? (
+            <input ref={createRef} type="text" value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setIsCreating(false); setNewName(''); } }}
+              onBlur={handleCreate} placeholder="Name..."
+              className="w-24 px-2 py-0.5 text-[12px] bg-input border border-border rounded-md text-foreground placeholder:text-foreground-muted focus:ring-1 focus:ring-ring" />
+          ) : (
+            <button onClick={() => setIsCreating(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-[12px] font-medium text-foreground-secondary hover:text-foreground border border-border hover:border-border-hover rounded-lg hover:bg-elevated transition-colors">
+              <Plus size={13} />
+              Create
+            </button>
+          )}
+        </>}
 
         {/* Icon buttons */}
         <button onClick={toggleTheme} title={isDark ? 'Light mode' : 'Dark mode'}
           className="p-1.5 rounded-lg hover:bg-elevated text-foreground-muted hover:text-foreground transition-colors">
           {isDark ? <Sun size={14} /> : <Moon size={14} />}
         </button>
-        {selectedNotebookId && (
+        {!isBrain && selectedNotebookId && (
           <button onClick={handleExport} title="Export"
             className="p-1.5 rounded-lg hover:bg-elevated text-foreground-muted hover:text-foreground transition-colors">
             <Download size={14} />

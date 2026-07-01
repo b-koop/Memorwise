@@ -5,8 +5,7 @@ import { motion } from "framer-motion";
 import { Plus, ArrowRight, Trash2, Search, BookOpen } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 import { confirm } from "@/components/ui/ConfirmDialog";
-import { TopBar, type AppSection } from "@/components/layout/TopBar";
-import { BrainReviewView } from "@/components/brain/BrainReviewView";
+import { TopBar } from "@/components/layout/TopBar";
 import { SourcesPanel } from "@/components/layout/SourcesPanel";
 import { MainLayout, type CenterView } from "@/components/layout/MainLayout";
 import { StudioPanel } from "@/components/layout/StudioPanel";
@@ -250,7 +249,6 @@ export default function Home() {
 	const selectedNotebookId = useNotebookStore((s) => s.selectedNotebookId);
 
 	const [activeView, setActiveView] = useState<CenterView>("chat");
-	const [activeSection, setActiveSection] = useState<AppSection>("notebooks");
 
 	useEffect(() => {
 		loadNotebooks();
@@ -303,15 +301,9 @@ export default function Home() {
 
 	return (
 		<div className="flex flex-col h-screen bg-surface">
-			<TopBar activeSection={activeSection} onSectionChange={setActiveSection} />
+			<TopBar />
 
-			{activeSection === "brain" ? (
-				<div className="flex-1 flex p-1.5 overflow-hidden">
-					<div className="flex-1 flex bg-card rounded-xl border border-border overflow-hidden">
-						<BrainReviewView />
-					</div>
-				</div>
-			) : !selectedNotebookId ? (
+			{!selectedNotebookId ? (
 				<WelcomeScreen />
 			) : (
 				<div

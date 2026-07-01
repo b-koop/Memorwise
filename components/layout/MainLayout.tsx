@@ -10,10 +10,9 @@ import { FlashcardView } from '@/components/flashcards/FlashcardView';
 import { QuizView } from '@/components/quiz/QuizView';
 import { SourceViewer } from '@/components/sources/SourceViewer';
 import { useEffect } from 'react';
-import { StickyNote, MessageSquare, Network, Brain } from 'lucide-react';
-import { BrainReviewView } from '@/components/brain/BrainReviewView';
+import { StickyNote, MessageSquare, Network } from 'lucide-react';
 
-export type CenterView = 'chat' | 'notes' | 'graph' | 'flashcards' | 'quiz' | 'brain';
+export type CenterView = 'chat' | 'notes' | 'graph' | 'flashcards' | 'quiz';
 
 interface MainLayoutProps {
   activeView: CenterView;
@@ -82,7 +81,6 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
         {([
           { key: 'chat', label: 'Chat', icon: MessageSquare },
           { key: 'graph', label: 'Graph', icon: Network },
-          { key: 'brain', label: 'Brain', icon: Brain },
         ] as const).map(tab => (
           <button
             key={tab.key}
@@ -106,7 +104,6 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
           {activeView === 'graph' && (
             <GraphView notebookId={selectedNotebookId} />
           )}
-          {activeView === 'brain' && <BrainReviewView />}
           {activeView === 'flashcards' && (
             <FlashcardView notebookId={selectedNotebookId} />
           )}
