@@ -29,3 +29,6 @@ __pycache__/
 remotion/
 design-system.md
 =0.9.2
+
+# Agent session artifacts
+.rpiv/
