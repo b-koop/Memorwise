@@ -19,7 +19,14 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { toast } from '@/components/ui/Toast';
 import { confirm } from '@/components/ui/ConfirmDialog';
 
-export function TopBar() {
+export type AppSection = 'notebooks' | 'brain';
+
+interface TopBarProps {
+  activeSection: AppSection;
+  onSectionChange: (section: AppSection) => void;
+}
+
+export function TopBar({ activeSection, onSectionChange }: TopBarProps) {
   const { notebooks, selectedNotebookId, selectNotebook, createNotebook, deleteNotebook } = useNotebookStore();
   const { loadSessions } = useChatStore();
   const { openSettings } = useSettingsStore();
@@ -47,7 +54,7 @@ export function TopBar() {
   useEffect(() => { if (isRenaming && renameRef.current) renameRef.current.focus(); }, [isRenaming]);
   useEffect(() => { if (isCreating && createRef.current) createRef.current.focus(); }, [isCreating]);
 
-  const handleSelectNotebook = async (id: string) => { setDropdownOpen(false); await selectNotebook(id); await loadSessions(id); };
+  const handleSelectNotebook = async (id: string) => { setDropdownOpen(false); onSectionChange('notebooks'); await selectNotebook(id); await loadSessions(id); };
 
   const handleRename = async () => {
     const name = renameValue.trim();
@@ -94,12 +101,28 @@ export function TopBar() {
 
   return (
     <div className="h-11 min-h-11 flex items-center justify-between px-4 bg-card border-b border-border">
-      {/* Left: Logo + Notebook name */}
+      {/* Left: Logo + Section links + Notebook name */}
       <div className="flex items-center gap-6">
         <img src="/logo-full.png" alt="Memorwise" className="h-[18px] logo-adaptive cursor-pointer"
-          onClick={() => selectNotebook(null)} />
+          onClick={() => { selectNotebook(null); onSectionChange('notebooks'); }} />
 
-        {selectedNotebook && (
+        <nav className="flex items-center gap-1">
+          {([
+            { key: 'notebooks', label: 'Notebooks' },
+            { key: 'brain', label: 'OpenBrain' },
+          ] as const).map(section => (
+            <button key={section.key} onClick={() => onSectionChange(section.key)}
+              className={`px-2.5 py-1 text-[12px] rounded-lg transition-colors ${
+                activeSection === section.key
+                  ? 'bg-elevated text-foreground'
+                  : 'text-foreground-muted hover:text-foreground-secondary hover:bg-elevated/50'
+              }`}>
+              {section.label}
+            </button>
+          ))}
+        </nav>
+
+        {activeSection === 'notebooks' && selectedNotebook && (
           isRenaming ? (
             <input ref={renameRef} type="text" value={renameValue}
               onChange={e => setRenameValue(e.target.value)}
