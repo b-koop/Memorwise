@@ -78,10 +78,9 @@ const {
 	removeNotebookSourcesDir,
 	unlinkSourceFile,
 } = require("./lib/source-files.ts");
-const { createOpenBrain } = require("./lib/openbrain/index.ts");
+const openBrain = require("./lib/openbrain/store.ts");
 const fs = require("fs");
 const MAX_MCP_TEXT_SOURCE_BYTES = 10 * 1024 * 1024;
-const openBrain = createOpenBrain();
 
 function readTextPrefix(filepath, maxBytes = 64 * 1024) {
 	const fd = fs.openSync(filepath, "r");
