@@ -1,0 +1,114 @@
+Feature: Local deep research with traceable evidence
+
+  A local deep research assistant helps researchers investigate broad questions by planning first, collecting evidence, scoring sources, and producing answers whose claims can be inspected.
+
+  Rule: Research starts from an inspectable plan
+
+    Scenario: Researcher receives a plan for a broad question
+      Given the researcher wants to investigate "How does fusion power work?"
+      When the researcher starts a deep research run
+      Then the researcher sees a research plan with history, physics, current reactors, commercial efforts, and major challenges
+      And the researcher can inspect the planned research areas before the answer is written
+
+    Scenario: Researcher sees focused search directions
+      Given a research plan includes "current reactors" and "commercial efforts"
+      When the research run prepares search directions
+      Then the researcher sees multiple focused search directions such as "ITER progress" and "commercial fusion startups"
+      And the directions are more specific than the original question
+
+  Rule: Evidence is collected before conclusions
+
+    Scenario: Candidate sources are visible before they influence the answer
+      Given the research run has found candidate sources for a question
+      When source collection is summarized for the researcher
+      Then each usable source shows its title, author when available, publication date when available, and source location
+      And irrelevant page material such as ads, navigation, and comments is excluded from the source summary
+
+    Scenario: Unreadable candidate sources do not silently shape the answer
+      Given the research run includes a source that cannot be fetched or read
+      When evidence collection finishes
+      Then the researcher sees that the source could not be used
+      And the source does not appear as evidence for a claim
+
+    Scenario: Duplicate candidate sources do not inflate confidence
+      Given the research run finds repeated copies of the same source
+      When candidate sources are narrowed for evidence review
+      Then the researcher sees one usable source entry for that material
+      And the repeated copies do not make the evidence appear more corroborated
+
+  Rule: Sources are scored, never automatically trusted
+
+    Scenario: Researcher sees why a source is considered stronger
+      Given the research run has collected a government report, a university article, and an uncited anonymous article
+      When source quality is reviewed
+      Then the government and university sources show higher confidence reasons such as institutional authority, authorship, citations, recency, or topic expertise
+      And the anonymous uncited article shows reduced confidence reasons
+
+    Scenario: Low-quality sources cannot carry important claims alone
+      Given the evidence notebook contains only low-confidence evidence for an important claim
+      When the research run prepares the final answer
+      Then the answer marks the claim as weakly supported or excludes it
+      And the researcher can see which evidence was missing or insufficient
+
+  Rule: Claims come from notebook evidence
+
+    Scenario: Final answer links each claim to inspectable evidence
+      Given the evidence notebook contains useful quoted evidence from several sources
+      When the research run writes the final answer
+      Then each major claim in the answer is linked to one or more evidence items
+      And each evidence item shows the source, quote, confidence, and related topic
+
+    Scenario: Assistant declines to answer beyond collected evidence
+      Given the collected evidence does not answer part of the research question
+      When the research run writes the final answer
+      Then that part of the answer says the evidence is insufficient
+      And the answer does not present unsupported speculation as fact
+
+    Scenario: Researcher sees when no credible evidence was found
+      Given the research run collected only sources with very low confidence
+      When the research run writes the final answer
+      Then the researcher sees that the question cannot be answered confidently from the collected evidence
+      And the researcher can inspect which source quality concerns prevented a confident answer
+
+  Rule: Verification protects the final response
+
+    Scenario: Unsupported claims are caught before the answer is shown
+      Given a draft answer contains a claim with no supporting evidence item
+      When the research run performs verification
+      Then the unsupported claim is removed or labeled as unsupported before the final answer is shown
+      And the researcher can inspect why the claim was not accepted
+
+    Scenario: Conflicting evidence is reported as disagreement
+      Given one collected source supports a conclusion
+      And another collected source contradicts that conclusion
+      When the research run performs verification
+      Then the final answer says there is disagreement
+      And the answer shows the evidence for each side instead of choosing one without support
+
+    Scenario: Stale sources are visible in time-sensitive research
+      Given the research question depends on current information
+      And an evidence item comes from an older source
+      When the research run performs verification
+      Then the final answer identifies the source as potentially stale
+      And the confidence for claims relying on that source reflects the freshness concern
+
+  Rule: Research confidence is explained
+
+    Scenario: Researcher sees the confidence behind a conclusion
+      Given the final answer includes a conclusion based on multiple sources
+      When the researcher inspects the conclusion
+      Then the researcher sees how domain quality, evidence quality, source agreement, freshness, and primary-source status contributed to confidence
+
+    Scenario: Domain expertise changes which sources are preferred
+      Given the researcher is investigating a software topic
+      When source quality is evaluated
+      Then official documentation, standards, RFCs, and relevant public code references are preferred over generic commentary
+      And the answer still shows why each selected source was trusted
+
+  Rule: Research history can inform future work
+
+    Scenario: Researcher can reuse prior research context
+      Given the researcher previously completed a deep research run on a topic
+      When the researcher starts a related research run
+      Then prior useful domains, searches, and evidence can be offered as context
+      And the researcher can distinguish prior context from evidence collected for the current answer
