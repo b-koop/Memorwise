@@ -130,7 +130,7 @@ export function searchThoughts(
 		})
 		.map((thought) => ({
 			thought,
-			context: `${thought.title} · ${thought.source ?? "Open Brain"} · ${thought.updatedAt}`,
+			context: `${thought.title} · ${thought.source ?? "Brain"} · ${thought.updatedAt}`,
 		}));
 }
 

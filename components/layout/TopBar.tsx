@@ -107,7 +107,7 @@ export function TopBar() {
         <nav className="flex items-center gap-1">
           {([
             { href: '/', label: 'Notebooks', active: !isBrain },
-            { href: '/brain', label: 'OpenBrain', active: isBrain },
+            { href: '/brain', label: 'Brain', active: isBrain },
           ] as const).map(section => (
             <Link key={section.href} href={section.href}
               className={`px-2.5 py-1 text-[12px] rounded-lg transition-colors ${

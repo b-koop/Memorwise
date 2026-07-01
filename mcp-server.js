@@ -108,7 +108,7 @@ function createServer() {
 
 	server.tool(
 		"openbrain_capture_thought",
-		"Capture a local Open Brain thought",
+		"Capture a local Brain thought",
 		{
 			text: z.string().describe("Thought text"),
 			title: z.string().optional().describe("Optional title"),
@@ -128,7 +128,7 @@ function createServer() {
 
 	server.tool(
 		"openbrain_search_thoughts",
-		"Search local Open Brain thoughts",
+		"Search local Brain thoughts",
 		{
 			query: z.string().describe("Search query"),
 			includeRestricted: z
@@ -146,7 +146,7 @@ function createServer() {
 
 	server.tool(
 		"openbrain_get_thought",
-		"Get a local Open Brain thought by ID",
+		"Get a local Brain thought by ID",
 		{
 			id: z.string().describe("Thought ID"),
 			includeRestricted: z
