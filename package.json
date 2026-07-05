@@ -11,7 +11,10 @@
     "build": "next build",
     "start": "next start --port 4747",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_OPTIONS='--import tsx' node test/url-state.test.mjs && NODE_OPTIONS='--import tsx' node test/source-import-primitives.test.mjs && npm run test:deep-research && npm run test:openbrain",
     "test:openbrain": "NODE_OPTIONS='--import tsx' cucumber-js --config cucumber.mjs",
+    "test:deep-research": "NODE_OPTIONS='--import tsx' cucumber-js --config cucumber.deep-research.mjs",
     "setup": "bash scripts/setup.sh",
     "mcp": "node mcp-server.js"
   },
