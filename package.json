@@ -1,8 +1,8 @@
 {
-  "name": "memorwise",
+  "name": "the-stacks",
   "version": "1.0.23",
   "private": true,
-  "description": "Your local, open-source notebook for chatting with documents using any LLM",
+  "description": "The Stacks — your local, open-source research library for chatting with documents using any LLM",
   "engines": {
     "node": "^22.13.0 || >=24.0.0"
   },
@@ -12,7 +12,7 @@
     "start": "next start --port 4747",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_OPTIONS='--import tsx' node test/url-state.test.mjs && NODE_OPTIONS='--import tsx' node test/source-import-primitives.test.mjs && npm run test:deep-research && npm run test:openbrain",
+    "test": "NODE_OPTIONS='--import tsx' node test/url-state.test.mjs && NODE_OPTIONS='--import tsx' node test/source-import-primitives.test.mjs && NODE_OPTIONS='--import tsx' node test/deep-research-follow-up-provenance.test.mjs && npm run test:deep-research && npm run test:openbrain",
     "test:openbrain": "NODE_OPTIONS='--import tsx' cucumber-js --config cucumber.mjs",
     "test:deep-research": "NODE_OPTIONS='--import tsx' cucumber-js --config cucumber.deep-research.mjs",
     "setup": "bash scripts/setup.sh",
@@ -40,6 +40,7 @@
     "pdf-parse": "^1.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "smart-model-run": "0.2.0",
     "tesseract.js": "^7.0.0",
     "typescript": "^5.7.0",
     "uuid": "^11.1.1",

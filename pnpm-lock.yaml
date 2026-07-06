@@ -71,6 +71,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
+      smart-model-run:
+        specifier: 0.2.0
+        version: 0.2.0
       tesseract.js:
         specifier: ^7.0.0
         version: 7.0.0
@@ -2280,6 +2283,9 @@ packages:
 
   simple-get@4.0.1:
     resolution: {integrity: sha512-brv7p5WgH0jmQJr1ZDDfKDOSeWWg+OVypG99A/5vYGPqJ6pxiaHLy8nxtFjBA7oMa01ebA9gfh1uMCFqOuXxvA==}
+
+  smart-model-run@0.2.0:
+    resolution: {integrity: sha512-2GSZrmX+DKJ6szjfhuq/t9y5LhFPanpmDmuOaB/Ln7gDNlxFT220fQaUB6+RIMdspdzV6U1G+X0vv3yJTGVTIQ==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -4668,6 +4674,8 @@ snapshots:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
+
+  smart-model-run@0.2.0: {}
 
   source-map-js@1.2.1: {}
 
