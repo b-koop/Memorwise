@@ -1,28 +1,47 @@
-# Memorwise
+# The Stacks
 
-An open-source, local-first alternative to NotebookLM. Drop in PDFs, images, audio, video, URLs, or YouTube links. Memorwise chunks and embeds them on your machine, then lets you chat with the material using the LLM provider you prefer.
+The Stacks is a branch of Memorwise focused on a cleaner local research workspace, updated branding, and easier local setup. It stays open-source and local-first: drop in PDFs, images, audio, video, URLs, or YouTube links, then chat with the material using the LLM provider you prefer.
+
+## What This Branch Adds
+
+Compared with Memorwise, The Stacks adds:
+
+- **The Stacks naming and branding** — updated app name, package name, logos, favicon, MCP namespace, desktop launcher, and local data directory.
+- **One-command install and local domain support** — `npx the-stacks`, `local.thestacks.com`, and helper scripts for DNS and launch-agent setup.
+- **Memorwise migration tools** — import existing Memorwise notebooks and data into `~/.the-stacks/`.
+- **Deep Research workspace** — plan research questions, collect evidence, check confidence, and import discovered sources into notebooks.
+- **Improved navigation state** — shareable notebook URLs for active notebook, view, source, note, chat session, and brain-review filters.
+- **Expanded local-first safeguards** — safer URL importing, bounded file/context handling, and local-only MCP defaults.
+- **Refined workspace UI** — updated top navigation, search flow, settings, source discovery, and research/brain review surfaces.
 
 ## Get Started
 
 ```bash
-npx memorwise
+npx the-stacks
 ```
 
-That's it. The installer clones the repo, installs dependencies, starts the server, and opens your browser to **http://localhost:4747**. Head to **Settings** (gear icon), connect at least one LLM provider, create a notebook, add sources, and start chatting.
+That's it. The installer clones the repo, installs dependencies, starts the server, and opens your browser to **<http://localhost:4747>**. Head to **Settings** (gear icon), connect at least one LLM provider, create a notebook, add sources, and start chatting.
 
-You can also visit **[local.memorwise.com](http://local.memorwise.com)** — it auto-detects and redirects to your running instance.
+You can also visit **[local.thestacks.com](http://local.thestacks.com)** — it auto-detects and redirects to your running instance.
+
+**One-time local DNS setup** (maps `local.thestacks.com` to your machine):
+
+```bash
+sudo bash scripts/setup-local-dns.sh
+```
 
 **Requirements:** Node.js 22.13+ or 24+ and git
 
 **Prefer to do it manually?**
+
 ```bash
-git clone https://github.com/robzilla1738/Memorwise.git
-cd Memorwise
+git clone https://github.com/b-koop/the-stacks.git
+cd the-stacks
 npm install
 npm run dev
 ```
 
-Then open **http://localhost:4747**.
+Then open **<http://localhost:4747>**.
 
 ## Connecting an LLM Provider
 
@@ -40,6 +59,7 @@ Open Settings → **Providers**. Pick at least one — you can always add more l
 | **OpenRouter** | Paste your API key from [openrouter.ai](https://openrouter.ai/keys) |
 
 **Mix and match providers per task** — use whatever combination makes sense for you:
+
 - **Chat** — Any provider (e.g., OpenAI GPT-5.4, Claude, local Ollama model)
 - **Embeddings** — Local model recommended (e.g., Ollama `nomic-embed-text`)
 - **Transcription** — OpenAI Whisper, Groq Whisper, or Local Whisper
@@ -70,7 +90,7 @@ Sources are chunked, embedded, and indexed on upload. Images go through local OC
 
 ## Safety Limits
 
-Memorwise runs locally, but imported content is still treated as untrusted.
+The Stacks runs locally, but imported content is still treated as untrusted.
 
 - URL imports only fetch public `http` or `https` addresses. Localhost, private networks, link-local addresses, and IPv4-in-IPv6 private forms are blocked.
 - File uploads stream to disk and are capped at 500MB per file.
@@ -91,19 +111,26 @@ Everything below is optional — only install what you need:
 
 ## Data Storage
 
-All your data stays local in `.memorwise/` at the project root:
+All your data stays local in `~/.the-stacks/` (override with `THE_STACKS_DATA_DIR`):
 
 ```
-.memorwise/
-├── memorwise.db     — SQLite database
+~/.the-stacks/
+├── thestacks.db     — SQLite database
 ├── lancedb/         — Vector embeddings
 ├── sources/         — Uploaded files
 └── whisper-models/  — Local Whisper models (if used)
 ```
 
-Want to store data somewhere else? Set the `MEMORWISE_DATA_DIR` environment variable:
+**Migrating from Memorwise?** Import your old notebooks with:
+
 ```bash
-MEMORWISE_DATA_DIR=/path/to/data npm run dev
+bash scripts/import-memorwise-data.sh
+```
+
+Want to store data somewhere else? Set the `THE_STACKS_DATA_DIR` environment variable:
+
+```bash
+THE_STACKS_DATA_DIR=/path/to/data npm run dev
 ```
 
 ## Local TTS with Kokoro (Optional)
@@ -111,6 +138,7 @@ MEMORWISE_DATA_DIR=/path/to/data npm run dev
 Kokoro is a small (82M parameter) text-to-speech model that runs on your machine. It powers Audio Overview when you want generated podcast audio without an OpenAI key.
 
 **Quick setup:**
+
 ```bash
 ./scripts/setup-kokoro.sh
 ```
@@ -136,15 +164,17 @@ python3.12 -m venv .kokoro-venv
 source .kokoro-venv/bin/activate
 pip install kokoro>=0.9.2 soundfile flask
 ```
+
 </details>
 
 **Start the Kokoro server:**
+
 ```bash
 source .kokoro-venv/bin/activate
 python scripts/kokoro-server.py
 ```
 
-Then in Memorwise: Settings → **Audio** → **Kokoro (Local)** → pick a voice → generate an Audio Overview.
+Then in The Stacks: Settings → **Audio** → **Kokoro (Local)** → pick a voice → generate an Audio Overview.
 
 > Kokoro runs in a separate terminal. You only need it when generating audio.
 
@@ -152,13 +182,13 @@ Then in Memorwise: Settings → **Audio** → **Kokoro (Local)** → pick a voic
 
 ## Desktop App (Optional)
 
-Add Memorwise to your Dock/app menu so you can launch it with a click:
+Add The Stacks to your Dock/app menu so you can launch it with a click:
 
 ```bash
 ./scripts/create-desktop-app.sh
 ```
 
-**macOS:** Creates `Memorwise.app` in `/Applications`. Drag it to your Dock.
+**macOS:** Creates `The Stacks.app` in `/Applications`. Drag it to your Dock.
 **Linux:** Creates a `.desktop` launcher in your app menu.
 
 The app automatically starts the server if it's not already running, waits for it to be ready, then opens your browser.
@@ -167,37 +197,40 @@ The app automatically starts the server if it's not already running, waits for i
 
 ## MCP Server (Claude Code / Cursor / Codex)
 
-Memorwise ships with an MCP server so AI coding assistants can read, search, and interact with your notebooks directly.
+The Stacks ships with an MCP server so AI coding assistants can read, search, and interact with your notebooks directly.
 
 **Claude Code** — add to `~/.claude.json` or `.claude/settings.json`:
+
 ```json
 {
   "mcpServers": {
-    "memorwise": {
+    "the-stacks": {
       "command": "node",
-      "args": ["/path/to/memorwise/mcp-server.js"]
+      "args": ["/path/to/the-stacks/mcp-server.js"]
     }
   }
 }
 ```
 
 **Cursor** — add to `.cursor/mcp.json`:
+
 ```json
 {
   "mcpServers": {
-    "memorwise": {
+    "the-stacks": {
       "command": "node",
-      "args": ["/path/to/memorwise/mcp-server.js"]
+      "args": ["/path/to/the-stacks/mcp-server.js"]
     }
   }
 }
 ```
 
 **Codex** — add to `~/.codex/config.toml`:
+
 ```toml
-[mcp_servers.memorwise]
+[mcp_servers.the-stacks]
 command = "node"
-args = ["/path/to/memorwise/mcp-server.js"]
+args = ["/path/to/the-stacks/mcp-server.js"]
 ```
 
 No extra setup — it uses `node` directly with the project's TypeScript compiler.
@@ -206,7 +239,7 @@ No extra setup — it uses `node` directly with the project's TypeScript compile
 
 ```json
 "env": {
-  "MEMORWISE_MCP_STDIO_TRANSPORT": "newline"
+  "THE_STACKS_MCP_STDIO_TRANSPORT": "newline"
 }
 ```
 
@@ -214,42 +247,42 @@ Accepted values are `content-length` (default), `newline`, and `auto`. GUI clien
 
 ### Troubleshooting MCP connections
 
-Use this bottom-up loop when Memorwise does not appear in Cursor, Codex, Claude Code, or another MCP client. These commands assume fish shell and a local checkout at `/Users/benjaminkoop/code/ai/Memorwise`; replace that path if your checkout lives elsewhere.
+Use this bottom-up loop when The Stacks does not appear in Cursor, Codex, Claude Code, or another MCP client. These commands assume fish shell and a local checkout at `/Users/benjaminkoop/code/ai/the-stacks`; replace that path if your checkout lives elsewhere.
 
 #### 1. Set known-good local variables
 
 ```fish
-set -gx MEMORWISE_ROOT /Users/benjaminkoop/code/ai/Memorwise
+set -gx THE_STACKS_ROOT /Users/benjaminkoop/code/ai/the-stacks
 set -gx NODE_BIN (command -v node)
 
-echo $MEMORWISE_ROOT
+echo $THE_STACKS_ROOT
 echo $NODE_BIN
 $NODE_BIN -v
 
-test -f "$MEMORWISE_ROOT/mcp-server.js"; and echo "mcp-server.js OK"; or echo "Missing mcp-server.js"
+test -f "$THE_STACKS_ROOT/mcp-server.js"; and echo "mcp-server.js OK"; or echo "Missing mcp-server.js"
 $NODE_BIN -e 'const [M,m]=process.versions.node.split(".").map(Number); process.exit(((M===22&&m>=13)||M>=24)?0:1)'; and echo "Node version OK"; or echo "Node version BAD"
 ```
 
-Expected: `mcp-server.js OK` and `Node version OK`. Memorwise requires Node.js 22.13+ or 24+. If Node is bad, fix Node first. GUI clients often do not inherit your shell `PATH`, so use the absolute `$NODE_BIN` value in MCP client config rather than just `"node"`.
+Expected: `mcp-server.js OK` and `Node version OK`. The Stacks requires Node.js 22.13+ or 24+. If Node is bad, fix Node first. GUI clients often do not inherit your shell `PATH`, so use the absolute `$NODE_BIN` value in MCP client config rather than just `"node"`.
 
 #### 2. Check dependencies
 
 ```fish
-cd "$MEMORWISE_ROOT"
+cd "$THE_STACKS_ROOT"
 npm ls --depth 0 typescript better-sqlite3
 ```
 
 If modules are missing, install dependencies:
 
 ```fish
-cd "$MEMORWISE_ROOT"
+cd "$THE_STACKS_ROOT"
 npm install
 ```
 
 If errors mention `better-sqlite3` native bindings, rebuild it:
 
 ```fish
-cd "$MEMORWISE_ROOT"
+cd "$THE_STACKS_ROOT"
 npm rebuild better-sqlite3
 ```
 
@@ -265,23 +298,23 @@ set tmp (mktemp -d)
 begin
   printf 'Content-Length: %d\r\n\r\n%s' (string length -- $init) $init
   printf 'Content-Length: %d\r\n\r\n%s' (string length -- $tools) $tools
-end | env MEMORWISE_DATA_DIR="$tmp" MEMORWISE_MCP_STDIO_TRANSPORT=content-length "$NODE_BIN" "$MEMORWISE_ROOT/mcp-server.js" > /tmp/memorwise-mcp.out 2> /tmp/memorwise-mcp.err
+end | env THE_STACKS_DATA_DIR="$tmp" THE_STACKS_MCP_STDIO_TRANSPORT=content-length "$NODE_BIN" "$THE_STACKS_ROOT/mcp-server.js" > /tmp/stacks-mcp.out 2> /tmp/stacks-mcp.err
 
-grep -q 'memorwise_list_notebooks' /tmp/memorwise-mcp.out; and echo "Content-Length MCP OK"; or begin echo "Content-Length MCP FAILED"; cat /tmp/memorwise-mcp.err; end
+grep -q 'stacks_list_notebooks' /tmp/stacks-mcp.out; and echo "Content-Length MCP OK"; or begin echo "Content-Length MCP FAILED"; cat /tmp/stacks-mcp.err; end
 
 rm -rf "$tmp"
 ```
 
-Expected: `Content-Length MCP OK`; stderr should contain `Server started (35 tools, content-length stdio)` and no parse errors. If this fails, fix the Memorwise server/runtime layer before changing client config.
+Expected: `Content-Length MCP OK`; stderr should contain `Server started (35 tools, content-length stdio)` and no parse errors. If this fails, fix the The Stacks server/runtime layer before changing client config.
 
 #### 4. Smoke test newline-delimited stdio
 
 ```fish
 set tmp (mktemp -d)
 
-printf '%s\n%s\n' $init $tools | env MEMORWISE_DATA_DIR="$tmp" MEMORWISE_MCP_STDIO_TRANSPORT=newline "$NODE_BIN" "$MEMORWISE_ROOT/mcp-server.js" > /tmp/memorwise-mcp-newline.out 2> /tmp/memorwise-mcp-newline.err
+printf '%s\n%s\n' $init $tools | env THE_STACKS_DATA_DIR="$tmp" THE_STACKS_MCP_STDIO_TRANSPORT=newline "$NODE_BIN" "$THE_STACKS_ROOT/mcp-server.js" > /tmp/stacks-mcp-newline.out 2> /tmp/stacks-mcp-newline.err
 
-grep -q 'memorwise_list_notebooks' /tmp/memorwise-mcp-newline.out; and echo "Newline MCP OK"; or begin echo "Newline MCP FAILED"; cat /tmp/memorwise-mcp-newline.err; end
+grep -q 'stacks_list_notebooks' /tmp/stacks-mcp-newline.out; and echo "Newline MCP OK"; or begin echo "Newline MCP FAILED"; cat /tmp/stacks-mcp-newline.err; end
 
 rm -rf "$tmp"
 ```
@@ -289,9 +322,9 @@ rm -rf "$tmp"
 Choose the client transport from the smoke-test result:
 
 - Both pass: the remaining issue is likely client config, client lifecycle, or client logs.
-- Only newline passes: set `MEMORWISE_MCP_STDIO_TRANSPORT` to `newline`.
-- Only Content-Length passes: set `MEMORWISE_MCP_STDIO_TRANSPORT` to `content-length`.
-- Unsure: set `MEMORWISE_MCP_STDIO_TRANSPORT` to `auto`.
+- Only newline passes: set `THE_STACKS_MCP_STDIO_TRANSPORT` to `newline`.
+- Only Content-Length passes: set `THE_STACKS_MCP_STDIO_TRANSPORT` to `content-length`.
+- Unsure: set `THE_STACKS_MCP_STDIO_TRANSPORT` to `auto`.
 
 #### 5. Use absolute paths in client configs
 
@@ -300,11 +333,11 @@ For Cursor:
 ```json
 {
   "mcpServers": {
-    "memorwise": {
+    "the-stacks": {
       "command": "/absolute/path/to/node",
-      "args": ["/Users/benjaminkoop/code/ai/Memorwise/mcp-server.js"],
+      "args": ["/Users/benjaminkoop/code/ai/the-stacks/mcp-server.js"],
       "env": {
-        "MEMORWISE_MCP_STDIO_TRANSPORT": "auto"
+        "THE_STACKS_MCP_STDIO_TRANSPORT": "auto"
       }
     }
   }
@@ -314,12 +347,12 @@ For Cursor:
 For Codex:
 
 ```toml
-[mcp_servers.memorwise]
+[mcp_servers.the-stacks]
 command = "/absolute/path/to/node"
-args = ["/Users/benjaminkoop/code/ai/Memorwise/mcp-server.js"]
+args = ["/Users/benjaminkoop/code/ai/the-stacks/mcp-server.js"]
 
-[mcp_servers.memorwise.env]
-MEMORWISE_MCP_STDIO_TRANSPORT = "auto"
+[mcp_servers.the-stacks.env]
+THE_STACKS_MCP_STDIO_TRANSPORT = "auto"
 ```
 
 Replace `/absolute/path/to/node` with:
@@ -328,9 +361,9 @@ Replace `/absolute/path/to/node` with:
 command -v node
 ```
 
-For pi: pi does not have built-in MCP support. Plain pi will not connect to Memorwise MCP. If you use a pi MCP extension/package, troubleshoot that extension with the same absolute `command`, `args`, and `env` values above.
+For pi: pi does not have built-in MCP support. Plain pi will not connect to The Stacks MCP. If you use a pi MCP extension/package, troubleshoot that extension with the same absolute `command`, `args`, and `env` values above.
 
-Do not set `MEMORWISE_MCP_ALLOW_STDOUT_LOGS=1` in MCP client config. MCP stdout must remain protocol-only.
+Do not set `THE_STACKS_MCP_ALLOW_STDOUT_LOGS=1` in MCP client config. MCP stdout must remain protocol-only.
 
 #### 6. Restart and verify the client
 
@@ -338,15 +371,15 @@ After changing MCP config:
 
 1. Quit the client completely.
 2. Reopen it.
-3. Confirm the `memorwise` MCP server is not marked failed.
+3. Confirm the `stacks` MCP server is not marked failed.
 4. Inspect MCP logs if it still fails.
-5. Verify the client lists tools including `memorwise_list_notebooks`, `memorwise_get_settings`, and `memorwise_search`.
-6. Call `memorwise_get_settings`; it should return provider/model/dataDir JSON.
-7. Call `memorwise_list_notebooks`; an empty array is OK.
+5. Verify the client lists tools including `stacks_list_notebooks`, `stacks_get_settings`, and `stacks_search`.
+6. Call `stacks_get_settings`; it should return provider/model/dataDir JSON.
+7. Call `stacks_list_notebooks`; an empty array is OK.
 
 A resolved connection has no repeated stderr errors such as `Cannot find module`, `Parse error`, `bad Content-Length`, Node version failures, or `better-sqlite3` native binding errors.
 
-Repeat the loop from the first failing layer: Content-Length smoke test → newline smoke test → fix one layer → restart client → list tools → call `memorwise_get_settings` → call `memorwise_list_notebooks`.
+Repeat the loop from the first failing layer: Content-Length smoke test → newline smoke test → fix one layer → restart client → list tools → call `stacks_get_settings` → call `stacks_list_notebooks`.
 
 **35 tools across 12 categories:**
 
