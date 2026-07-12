@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
 	Brain,
 	Lock,
@@ -11,6 +12,12 @@ import {
 } from "lucide-react";
 import { confirm } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/components/ui/Toast";
+import { useBrainNavigation } from "@/hooks/useStacksNavigation";
+import {
+	buildBrainUrl,
+	type BrainReviewStatus,
+	type BrainThoughtType,
+} from "@/lib/navigation/url-state";
 
 interface Thought {
 	id: string;
@@ -28,17 +35,16 @@ interface Thought {
 	updated_at: string;
 }
 
-type ReviewStatus = "pending" | "confirmed" | "evidence_only" | "rejected";
 type ReviewAction = "confirm" | "keep_evidence" | "reject";
 
-const STATUS_FILTERS: { key: ReviewStatus; label: string }[] = [
+const STATUS_FILTERS: { key: BrainReviewStatus; label: string }[] = [
 	{ key: "pending", label: "Needs review" },
 	{ key: "confirmed", label: "Confirmed" },
 	{ key: "evidence_only", label: "Evidence only" },
 	{ key: "rejected", label: "Rejected" },
 ];
 
-const TYPE_FILTERS: { key: string | null; label: string }[] = [
+const TYPE_FILTERS: { key: BrainThoughtType | null; label: string }[] = [
 	{ key: null, label: "All types" },
 	{ key: "note", label: "Note" },
 	{ key: "task", label: "Task" },
@@ -88,8 +94,11 @@ function Badge({ label, className }: { label: string; className: string }) {
 }
 
 export function BrainReviewView() {
-	const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("pending");
-	const [typeFilter, setTypeFilter] = useState<string | null>(null);
+	const { urlState, replaceBrainUrl } = useBrainNavigation();
+	const reviewStatus = urlState.status;
+	const typeFilter = urlState.type;
+	const thoughtId = urlState.thought;
+
 	const [thoughts, setThoughts] = useState<Thought[]>([]);
 	const [selected, setSelected] = useState<Thought | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -120,6 +129,40 @@ export function BrainReviewView() {
 			cancelled = true;
 		};
 	}, [reviewStatus, typeFilter]);
+
+	useEffect(() => {
+		if (!thoughtId) {
+			setSelected(null);
+			return;
+		}
+
+		const inList = thoughts.find((t) => t.id === thoughtId);
+		if (inList) {
+			setSelected(inList);
+			return;
+		}
+
+		if (loading) return;
+
+		let cancelled = false;
+		(async () => {
+			try {
+				const res = await fetch(`/api/openbrain/thoughts/${thoughtId}`);
+				if (!res.ok) {
+					replaceBrainUrl({ thought: null });
+					return;
+				}
+				const thought: Thought = await res.json();
+				if (!cancelled) setSelected(thought);
+			} catch {
+				if (!cancelled) replaceBrainUrl({ thought: null });
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [thoughtId, thoughts, loading, replaceBrainUrl]);
 
 	const handleReview = useCallback(
 		async (thought: Thought, action: ReviewAction) => {
@@ -153,39 +196,46 @@ export function BrainReviewView() {
 		[reviewStatus],
 	);
 
-	const handleDelete = useCallback(async (thought: Thought) => {
-		const ok = await confirm({
-			title: "Delete thought",
-			message: "This will permanently delete this thought. Continue?",
-			confirmLabel: "Delete",
-			destructive: true,
-		});
-		if (!ok) return;
-		try {
-			const res = await fetch(`/api/openbrain/thoughts/${thought.id}`, {
-				method: "DELETE",
+	const handleDelete = useCallback(
+		async (thought: Thought) => {
+			const ok = await confirm({
+				title: "Delete thought",
+				message: "This will permanently delete this thought. Continue?",
+				confirmLabel: "Delete",
+				destructive: true,
 			});
-			if (!res.ok) throw new Error("Delete failed");
-			setThoughts((prev) => prev.filter((t) => t.id !== thought.id));
-			setSelected((prev) => (prev?.id === thought.id ? null : prev));
-			toast("success", "Thought deleted");
-		} catch {
-			toast("error", "Failed to delete thought");
-		}
-	}, []);
+			if (!ok) return;
+			try {
+				const res = await fetch(`/api/openbrain/thoughts/${thought.id}`, {
+					method: "DELETE",
+				});
+				if (!res.ok) throw new Error("Delete failed");
+				setThoughts((prev) => prev.filter((t) => t.id !== thought.id));
+				if (thoughtId === thought.id) replaceBrainUrl({ thought: null });
+				setSelected((prev) => (prev?.id === thought.id ? null : prev));
+				toast("success", "Thought deleted");
+			} catch {
+				toast("error", "Failed to delete thought");
+			}
+		},
+		[thoughtId, replaceBrainUrl],
+	);
 
 	return (
 		<div className="flex-1 flex overflow-hidden">
-			{/* Left rail: filters */}
 			<div className="w-[200px] shrink-0 border-r border-border flex flex-col">
 				<div className="flex-1 overflow-y-auto p-2">
 					<p className="px-2 pt-1 pb-1.5 text-[10px] text-foreground-muted uppercase tracking-wider">
 						Review
 					</p>
 					{STATUS_FILTERS.map((f) => (
-						<button
+						<Link
 							key={f.key}
-							onClick={() => setReviewStatus(f.key)}
+							href={buildBrainUrl("/brain", {
+								...urlState,
+								status: f.key,
+								thought: null,
+							})}
 							className={`w-full flex items-center justify-between px-2 py-1.5 text-[13px] rounded-md transition-colors ${
 								reviewStatus === f.key
 									? "bg-elevated text-foreground"
@@ -198,7 +248,7 @@ export function BrainReviewView() {
 									{thoughts.length}
 								</span>
 							)}
-						</button>
+						</Link>
 					))}
 
 					<div className="my-2 border-t border-border" />
@@ -207,9 +257,13 @@ export function BrainReviewView() {
 						Type
 					</p>
 					{TYPE_FILTERS.map((f) => (
-						<button
+						<Link
 							key={f.key ?? "all"}
-							onClick={() => setTypeFilter(f.key)}
+							href={buildBrainUrl("/brain", {
+								...urlState,
+								type: f.key,
+								thought: null,
+							})}
 							className={`w-full flex items-center px-2 py-1.5 text-[13px] rounded-md transition-colors ${
 								typeFilter === f.key
 									? "bg-elevated text-foreground"
@@ -217,7 +271,7 @@ export function BrainReviewView() {
 							}`}
 						>
 							{f.label}
-						</button>
+						</Link>
 					))}
 				</div>
 				<div className="px-3 py-2 border-t border-border flex items-center gap-1.5 text-[11px] text-foreground-muted">
@@ -226,7 +280,6 @@ export function BrainReviewView() {
 				</div>
 			</div>
 
-			{/* Center: list + detail */}
 			{loading ? (
 				<div className="flex-1 flex items-center justify-center">
 					<p className="text-[13px] text-foreground-muted">Loading…</p>
@@ -244,10 +297,13 @@ export function BrainReviewView() {
 				<>
 					<div className="flex-1 overflow-y-auto p-3 space-y-2">
 						{thoughts.map((t) => (
-							<button
+							<Link
 								key={t.id}
-								onClick={() => setSelected(t)}
-								className={`w-full text-left p-3 rounded-md border transition-colors ${
+								href={buildBrainUrl("/brain", {
+									...urlState,
+									thought: t.id,
+								})}
+								className={`block w-full text-left p-3 rounded-md border transition-colors ${
 									selected?.id === t.id
 										? "border-accent-blue/50 bg-elevated"
 										: "border-border bg-card hover:bg-elevated/50"
@@ -284,7 +340,7 @@ export function BrainReviewView() {
 								<p className="text-[11px] text-foreground-muted mt-1">
 									{formatDate(t.created_at)}
 								</p>
-							</button>
+							</Link>
 						))}
 					</div>
 

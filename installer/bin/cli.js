@@ -17,8 +17,8 @@ function readVersion() {
 }
 
 const VERSION = readVersion();
-const REPO = 'https://github.com/robzilla1738/Memorwise.git';
-const APP_NAME = 'memorwise';
+const REPO = 'https://github.com/b-koop/the-stacks.git';
+const APP_NAME = 'the-stacks';
 const PORT = 4747;
 
 // ─── Colors ──────────────────────────────────
@@ -72,12 +72,13 @@ function openBrowser(url) {
 // ─── Banner ──────────────────────────────────
 function banner() {
   log();
-  log(`  ${c.cyan}${c.bold}  __  __                          _            ${c.reset}`);
-  log(`  ${c.cyan}${c.bold} |  \\/  |___ _ __  ___ _ ___ __ _(_)___ ___   ${c.reset}`);
-  log(`  ${c.cyan}${c.bold} | |\\/| / -_) '  \\/ _ \\ '_\\ V  V / (_-</ -_)  ${c.reset}`);
-  log(`  ${c.cyan}${c.bold} |_|  |_\\___|_|_|_\\___/_|  \\_/\\_/|_/__/\\___|  ${c.reset}`);
+  log(`  ${c.cyan}${c.bold}  _____ _          _             ${c.reset}`);
+  log(`  ${c.cyan}${c.bold} |_   _| |__  __ _| | _____  ___ ${c.reset}`);
+  log(`  ${c.cyan}${c.bold}   | | | '_ \\/ _\` | |/ / __|/ __|${c.reset}`);
+  log(`  ${c.cyan}${c.bold}   | | | | | (_| |   <\\__ \\\\__ \\\\${c.reset}`);
+  log(`  ${c.cyan}${c.bold}   |_| |_| |_|\\__,_|_|\\_\\___/|___/${c.reset}`);
   log();
-  log(`  ${c.dim}Chat with your documents locally${c.reset}            ${c.dim}v${VERSION}${c.reset}`);
+  log(`  ${c.dim}Your local research library${c.reset}                 ${c.dim}v${VERSION}${c.reset}`);
   log(`  ${c.dim}${'─'.repeat(49)}${c.reset}`);
 }
 
@@ -85,33 +86,33 @@ function banner() {
 function showHelp() {
   banner();
   log();
-  log(`  ${c.bold}Usage:${c.reset}  memorwise ${c.dim}[directory] [options]${c.reset}`);
+  log(`  ${c.bold}Usage:${c.reset}  the-stacks ${c.dim}[directory] [options]${c.reset}`);
   log();
   log(`  ${c.bold}Commands:${c.reset}`);
-  log(`    ${c.cyan}memorwise${c.reset}              Install and start Memorwise`);
-  log(`    ${c.cyan}memorwise my-research${c.reset}  Install into a custom directory`);
-  log(`    ${c.cyan}memorwise --help${c.reset}       Show this help message`);
-  log(`    ${c.cyan}memorwise --version${c.reset}    Show version number`);
+  log(`    ${c.cyan}the-stacks${c.reset}              Install and start The Stacks`);
+  log(`    ${c.cyan}the-stacks my-research${c.reset}  Install into a custom directory`);
+  log(`    ${c.cyan}the-stacks --help${c.reset}       Show this help message`);
+  log(`    ${c.cyan}the-stacks --version${c.reset}    Show version number`);
   log();
   log(`  ${c.bold}Options:${c.reset}`);
   log(`    ${c.green}-h, --help${c.reset}         Show this help message`);
   log(`    ${c.green}-v, --version${c.reset}      Show version number`);
-  log(`    ${c.green}-p, --port${c.reset} ${c.dim}<port>${c.reset}  Set dev server port ${c.dim}(default: 4747)${c.reset}`);
+  log(`    ${c.green}-p, --port${c.reset} ${c.dim}<port>${c.reset}  Set server port ${c.dim}(default: 4747)${c.reset}`);
   log(`    ${c.green}--no-open${c.reset}          Don't open browser automatically`);
   log(`    ${c.green}--no-update${c.reset}        Skip checking for updates`);
   log();
   log(`  ${c.bold}What it does:${c.reset}`);
-  log(`    ${c.dim}1.${c.reset} Clones the Memorwise repo (or detects existing install)`);
+  log(`    ${c.dim}1.${c.reset} Clones The Stacks repo (or detects existing install)`);
   log(`    ${c.dim}2.${c.reset} Checks for updates and pulls latest changes`);
   log(`    ${c.dim}3.${c.reset} Installs dependencies`);
-  log(`    ${c.dim}4.${c.reset} Starts the dev server`);
-  log(`    ${c.dim}5.${c.reset} Opens your browser to http://local.memorwise.com:4747`);
+  log(`    ${c.dim}4.${c.reset} Builds and starts the production server`);
+  log(`    ${c.dim}5.${c.reset} Opens your browser to http://local.thestacks.com:4747`);
   log();
   log(`  ${c.bold}After install:${c.reset}`);
-  log(`    ${c.dim}Run again with${c.reset} memorwise ${c.dim}or${c.reset} npx memorwise`);
-  log(`    ${c.dim}Or manually:${c.reset}     cd memorwise && npm run dev`);
+  log(`    ${c.dim}Run again with${c.reset} the-stacks ${c.dim}or${c.reset} npx the-stacks`);
+  log(`    ${c.dim}Or manually:${c.reset}     cd the-stacks && npm run build && npm start`);
   log();
-  log(`  ${c.dim}GitHub:${c.reset}  ${c.cyan}https://github.com/robzilla1738/Memorwise${c.reset}`);
+  log(`  ${c.dim}GitHub:${c.reset}  ${c.cyan}https://github.com/b-koop/the-stacks${c.reset}`);
   log();
 }
 
@@ -145,7 +146,7 @@ async function main() {
     process.exit(0);
   }
   if (args.includes('-v') || args.includes('--version')) {
-    log(`memorwise v${VERSION}`);
+    log(`the-stacks v${VERSION}`);
     process.exit(0);
   }
 
@@ -196,7 +197,7 @@ async function main() {
           const remote = runQuiet('git rev-parse origin/main', fullPath).trim();
           if (local !== remote) {
             updateSpinner.stop('Update available — pulling latest...');
-            const pullSpinner = createSpinner('Updating Memorwise...');
+            const pullSpinner = createSpinner('Updating The Stacks...');
             try {
               runQuiet('git pull origin main', fullPath);
               pullSpinner.stop('Updated to latest version');
@@ -264,7 +265,7 @@ async function main() {
 
 function startServer(dir, port, noOpen) {
   const url = `http://localhost:${port}`;
-  const displayUrl = port !== PORT ? url : 'http://local.memorwise.com:4747';
+  const displayUrl = port !== PORT ? url : 'http://local.thestacks.com:4747';
 
   log(`  ${c.dim}${'─'.repeat(49)}${c.reset}`);
   log();
@@ -278,16 +279,24 @@ function startServer(dir, port, noOpen) {
   log();
 
   if (!noOpen) {
-    const openUrl = port !== PORT ? `http://localhost:${port}` : 'http://local.memorwise.com:4747';
+    const openUrl = port !== PORT ? `http://localhost:${port}` : 'http://local.thestacks.com:4747';
     setTimeout(() => openBrowser(openUrl), 2500);
   }
 
   process.chdir(dir);
-  const env = { ...process.env };
+  const env = { ...process.env, NODE_ENV: 'production' };
 
-  // Use npx next dev directly with custom port (npm run dev hardcodes --port 4747)
+  try {
+    execSync('npm run build', { stdio: 'inherit', cwd: dir, env });
+  } catch {
+    fail('Production build failed');
+    process.exit(1);
+  }
+
   const cmd = port !== PORT ? 'npx' : 'npm';
-  const args = port !== PORT ? ['next', 'dev', '--port', String(port)] : ['run', 'dev'];
+  const args = port !== PORT
+    ? ['next', 'start', '--port', String(port)]
+    : ['run', 'start'];
 
   const child = spawn(cmd, args, {
     stdio: 'inherit',

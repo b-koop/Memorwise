@@ -1,26 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Plus, ArrowRight, Trash2, Search, BookOpen } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 import { confirm } from "@/components/ui/ConfirmDialog";
 import { TopBar } from "@/components/layout/TopBar";
 import { SourcesPanel } from "@/components/layout/SourcesPanel";
-import { MainLayout, type CenterView } from "@/components/layout/MainLayout";
+import { MainLayout } from "@/components/layout/MainLayout";
 import { StudioPanel } from "@/components/layout/StudioPanel";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { SearchModal } from "@/components/search/SearchModal";
+import { NotebookNavigationProvider } from "@/components/navigation/NotebookNavigationProvider";
+import { useNotebookNav } from "@/components/navigation/NotebookNavigationProvider";
 import { useNotebookStore } from "@/stores/notebook-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { ToastContainer } from "@/components/ui/Toast";
 import { ConfirmDialogProvider } from "@/components/ui/ConfirmDialog";
+import type { CenterView } from "@/lib/navigation/url-state";
+import { buildNotebookUrl } from "@/lib/navigation/url-state";
 
 function WelcomeScreen() {
 	const { notebooks, createNotebook, selectNotebook, deleteNotebook } =
 		useNotebookStore();
 	const { loadSessions } = useChatStore();
+	const { pushNotebookUrl } = useNotebookNav();
 	const [isCreating, setIsCreating] = useState(false);
 	const [newName, setNewName] = useState("");
 	const [notebookQuery, setNotebookQuery] = useState("");
@@ -35,13 +41,9 @@ function WelcomeScreen() {
 		const nb = await createNotebook(name);
 		setIsCreating(false);
 		setNewName("");
+		pushNotebookUrl({ notebook: nb.id, view: "chat" });
 		await selectNotebook(nb.id);
 		await loadSessions(nb.id);
-	};
-
-	const handleSelect = async (id: string) => {
-		await selectNotebook(id);
-		await loadSessions(id);
 	};
 
 	const filteredNotebooks = notebooks.filter((nb) =>
@@ -61,7 +63,7 @@ function WelcomeScreen() {
 					<div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-elevated">
 						<img
 							src="/logo-mark.png"
-							alt="Memorwise"
+							alt="The Stacks"
 							className="h-9 w-9 object-contain logo-adaptive"
 						/>
 					</div>
@@ -69,7 +71,7 @@ function WelcomeScreen() {
 						Local notebook library
 					</p>
 					<h1 className="mb-3 text-3xl font-semibold leading-tight text-foreground">
-						Welcome to Memorwise
+						Welcome to The Stacks
 					</h1>
 					<p className="mb-6 text-sm leading-6 text-foreground-secondary">
 						Your private research workspace for imported sources, generated
@@ -162,8 +164,11 @@ function WelcomeScreen() {
 									key={nb.id}
 									className="group relative min-h-[112px] overflow-hidden rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-border-subtle hover:bg-card-hover"
 								>
-									<button
-										onClick={() => handleSelect(nb.id)}
+									<Link
+										href={buildNotebookUrl("/", {
+											notebook: nb.id,
+											view: "chat",
+										})}
 										className="flex h-full w-full flex-col text-left"
 									>
 										<div className="mb-4 flex items-start justify-between gap-3">
@@ -181,7 +186,7 @@ function WelcomeScreen() {
 										<div className="mt-2 text-[11px] text-foreground-muted">
 											{new Date(nb.created_at).toLocaleDateString()}
 										</div>
-									</button>
+									</Link>
 									<button
 										onClick={async (e) => {
 											e.stopPropagation();
@@ -242,50 +247,156 @@ function WelcomeScreen() {
 	);
 }
 
-export default function Home() {
+function HomeContent() {
 	const loadNotebooks = useNotebookStore((s) => s.loadNotebooks);
 	const loadSettings = useSettingsStore((s) => s.loadSettings);
 	const loadProviders = useSettingsStore((s) => s.loadProviders);
+	const notebooks = useNotebookStore((s) => s.notebooks);
 	const selectedNotebookId = useNotebookStore((s) => s.selectedNotebookId);
+	const selectNotebook = useNotebookStore((s) => s.selectNotebook);
+	const sources = useNotebookStore((s) => s.sources);
+	const setViewingSource = useNotebookStore((s) => s.setViewingSource);
+	const loadSessions = useChatStore((s) => s.loadSessions);
+	const selectSession = useChatStore((s) => s.selectSession);
 
-	const [activeView, setActiveView] = useState<CenterView>("chat");
+	const { urlState, replaceNotebookUrl, markHydrated, isHydrated } =
+		useNotebookNav();
+	const hydratingRef = useRef(false);
+	const [bootstrapped, setBootstrapped] = useState(false);
 
 	useEffect(() => {
 		loadNotebooks();
 		loadSettings();
 		loadProviders();
-	}, [loadNotebooks, loadSettings]);
+	}, [loadNotebooks, loadSettings, loadProviders]);
 
-	// Reset view when notebook changes
 	useEffect(() => {
-		setActiveView("chat");
-	}, [selectedNotebookId]);
+		if (bootstrapped) return;
 
-	// Handle search result navigation
+		(async () => {
+			await loadNotebooks();
+			const list = useNotebookStore.getState().notebooks;
+			const { notebook, session } = urlState;
+
+			if (notebook) {
+				const exists = list.some((n) => n.id === notebook);
+				if (exists) {
+					hydratingRef.current = true;
+					await selectNotebook(notebook);
+					await loadSessions(notebook, session ?? undefined);
+					hydratingRef.current = false;
+				} else {
+					replaceNotebookUrl({
+						notebook: null,
+						view: "chat",
+						tab: "sources",
+						note: null,
+						session: null,
+						source: null,
+					});
+				}
+			}
+
+			setBootstrapped(true);
+			markHydrated();
+		})();
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once from initial URL
+	}, [
+		bootstrapped,
+		loadNotebooks,
+		selectNotebook,
+		loadSessions,
+		replaceNotebookUrl,
+		markHydrated,
+	]);
+
+	useEffect(() => {
+		if (!bootstrapped || !isHydrated() || hydratingRef.current) return;
+
+		const { notebook, session } = urlState;
+		if (notebook && !notebooks.some((n) => n.id === notebook)) {
+			replaceNotebookUrl({
+				notebook: null,
+				view: "chat",
+				tab: "sources",
+				note: null,
+				session: null,
+				source: null,
+			});
+			return;
+		}
+
+		if (notebook === selectedNotebookId) return;
+
+		if (notebook && notebooks.some((n) => n.id === notebook)) {
+			hydratingRef.current = true;
+			void (async () => {
+				await selectNotebook(notebook);
+				await loadSessions(notebook, session ?? undefined);
+				hydratingRef.current = false;
+			})();
+		} else if (!notebook && selectedNotebookId) {
+			void selectNotebook(null);
+		}
+	}, [
+		bootstrapped,
+		urlState.notebook,
+		urlState.session,
+		selectedNotebookId,
+		notebooks,
+		selectNotebook,
+		loadSessions,
+		isHydrated,
+	]);
+
+	useEffect(() => {
+		if (!bootstrapped || !selectedNotebookId || !urlState.source) return;
+		const src = sources.find((s) => s.id === urlState.source);
+		if (src) {
+			setViewingSource(src);
+		} else if (sources.length > 0) {
+			replaceNotebookUrl({ source: null });
+		}
+	}, [
+		bootstrapped,
+		selectedNotebookId,
+		urlState.source,
+		sources,
+		setViewingSource,
+		replaceNotebookUrl,
+	]);
+
 	useEffect(() => {
 		const handler = (e: Event) => {
 			const result = (e as CustomEvent).detail;
 			if (!result) return;
 			if (result.type === "note") {
+				replaceNotebookUrl({ view: "notes", note: result.id });
 				window.dispatchEvent(
-					new CustomEvent("memorwise:select-note", {
+					new CustomEvent("stacks:select-note", {
 						detail: { noteId: result.id },
 					}),
 				);
 			} else if (result.type === "source") {
 				const src = useNotebookStore
 					.getState()
-					.sources.find((s: any) => s.id === result.id);
-				if (src) useNotebookStore.getState().setViewingSource(src);
+					.sources.find((s) => s.id === result.id);
+				if (src) {
+					setViewingSource(src);
+					replaceNotebookUrl({ source: result.id });
+				}
 			} else if (result.type === "message" && result.sessionId) {
-				useChatStore.getState().selectSession(result.sessionId);
-				setActiveView("chat");
+				void selectSession(result.sessionId);
+				replaceNotebookUrl({ view: "chat", session: result.sessionId });
 			}
 		};
-		window.addEventListener("memorwise:search-navigate", handler);
-		return () =>
-			window.removeEventListener("memorwise:search-navigate", handler);
-	}, []);
+		window.addEventListener("stacks:search-navigate", handler);
+		return () => window.removeEventListener("stacks:search-navigate", handler);
+	}, [replaceNotebookUrl, selectSession, setViewingSource]);
+
+	const setActiveView = (view: CenterView) => {
+		replaceNotebookUrl({ view, note: null, session: null });
+	};
 
 	const handleStudioViewChange = (view: string) => {
 		if (
@@ -293,11 +404,14 @@ export default function Home() {
 			view === "graph" ||
 			view === "notes" ||
 			view === "chat" ||
-			view === "quiz"
+			view === "quiz" ||
+			view === "research"
 		) {
 			setActiveView(view as CenterView);
 		}
 	};
+
+	const activeView = selectedNotebookId ? urlState.view : "chat";
 
 	return (
 		<div className="flex flex-col h-screen bg-surface">
@@ -310,8 +424,12 @@ export default function Home() {
 					className="flex-1 flex p-1.5 overflow-hidden"
 					style={{ gap: "6px" }}
 				>
-					<SourcesPanel />
-					<MainLayout activeView={activeView} setActiveView={setActiveView} />
+					<SourcesPanel sidebarTab={urlState.tab} />
+					<MainLayout
+						activeView={activeView}
+						setActiveView={setActiveView}
+						selectedNoteId={urlState.note}
+					/>
 					<StudioPanel
 						notebookId={selectedNotebookId}
 						onViewChange={handleStudioViewChange}
@@ -324,5 +442,21 @@ export default function Home() {
 			<ToastContainer />
 			<ConfirmDialogProvider />
 		</div>
+	);
+}
+
+export default function Home() {
+	return (
+		<Suspense
+			fallback={
+				<div className="flex h-screen items-center justify-center bg-surface text-sm text-foreground-muted">
+					Loading…
+				</div>
+			}
+		>
+			<NotebookNavigationProvider>
+				<HomeContent />
+			</NotebookNavigationProvider>
+		</Suspense>
 	);
 }

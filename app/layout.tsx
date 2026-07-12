@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Memorwise',
-  description: 'Your local, open-source notebook for chatting with documents',
+  title: 'The Stacks',
+  description: 'Your local, open-source research library for chatting with documents',
   icons: { icon: '/favicon.png' },
 };
 

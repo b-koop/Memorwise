@@ -1,5 +1,5 @@
 #!/bin/bash
-# Memorwise — Kokoro Local TTS Setup
+# The Stacks — Kokoro Local TTS Setup
 # Run: chmod +x scripts/setup-kokoro.sh && ./scripts/setup-kokoro.sh
 
 set -e
@@ -69,5 +69,5 @@ echo "  To start the TTS server:"
 echo "    source .kokoro-venv/bin/activate"
 echo "    python scripts/kokoro-server.py"
 echo ""
-echo "  Then in Memorwise: Settings → Audio → Kokoro (Local)"
+echo "  Then in The Stacks: Settings → Audio → Kokoro (Local)"
 echo ""

@@ -1,9 +1,9 @@
 {
-  "name": "memorwise",
+  "name": "the-stacks",
   "version": "1.0.23",
   "description": "Your local, open-source notebook for chatting with documents using any LLM",
   "bin": {
-    "memorwise": "bin/cli.js"
+    "the-stacks": "bin/cli.js"
   },
   "files": [
     "bin/cli.js",
@@ -18,15 +18,15 @@
     "chat",
     "local",
     "open-source",
-    "memorwise"
+    "the-stacks"
   ],
   "author": "robzilla1738",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robzilla1738/Memorwise.git"
+    "url": "git+https://github.com/b-koop/the-stacks.git"
   },
-  "homepage": "https://github.com/robzilla1738/Memorwise#readme",
+  "homepage": "https://github.com/b-koop/the-stacks#readme",
   "engines": {
     "node": "^22.13.0 || >=24.0.0"
   }

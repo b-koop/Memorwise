@@ -3,7 +3,7 @@ node_modules/
 .next/
 out/
 dist/
-.memorwise/
+.the-stacks/
 .openlm/
 *.env
 .env*

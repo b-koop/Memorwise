@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Eye, EyeOff, CheckCircle2, XCircle, Loader2, MessageSquare, Database, Mic, Headphones, ChevronDown, RefreshCw, Server } from 'lucide-react';
+import { X, Eye, EyeOff, CheckCircle2, XCircle, Loader2, MessageSquare, Database, Mic, Headphones, ChevronDown, RefreshCw, Server, Globe } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settings-store';
 
 const PROVIDER_META: Record<string, {
@@ -62,7 +62,11 @@ const PROVIDER_META: Record<string, {
   },
 };
 
-type Tab = 'providers' | 'chat' | 'embeddings' | 'transcription' | 'audio';
+type Tab = 'providers' | 'chat' | 'embeddings' | 'search' | 'transcription' | 'audio';
+
+const SEARCH_PROVIDERS = [
+  { id: 'serper', name: 'Serper', desc: 'Google search results via serper.dev' },
+];
 
 const EMBEDDING_PROVIDERS = [
   { id: 'auto', name: 'Auto (use chat provider)' },
@@ -87,9 +91,11 @@ export function SettingsModal() {
     isOpen, closeSettings, activeProvider, activeChatModel, activeEmbeddingModel,
     embeddingProvider, transcriptionProvider, localWhisperModel,
     ttsProvider, ttsVoice, kokoroUrl, kokoroVoice, podcastSpeakers,
-    providers, loadProviders,
+    searchProvider, serperApiKey, hasSerperApiKey, deepResearchSearchLimit,
+    providers, loadProviders, loadSettings,
     setProvider, setChatModel, setEmbeddingModel, setEmbeddingProvider, setTranscriptionProvider, setLocalWhisperModel,
     setTTSProvider, setTTSVoice, setKokoroUrl, setKokoroVoice, setPodcastSpeakers,
+    setSearchProvider, configureSerperKey, setDeepResearchSearchLimit, testSearchConnection,
     configureProvider, testConnection,
   } = useSettingsStore();
 
@@ -114,6 +120,11 @@ export function SettingsModal() {
   const [whisperModels, setWhisperModels] = useState<{ id: string; name: string; description: string; accuracy: number; speed: number; size: string; language: string; downloaded: boolean }[]>([]);
   const [downloadingWhisper, setDownloadingWhisper] = useState<string | null>(null);
   const [whisperDownloadStatus, setWhisperDownloadStatus] = useState('');
+  const [serperKeyInput, setSerperKeyInput] = useState('');
+  const [showSerperKey, setShowSerperKey] = useState(false);
+  const [searchTesting, setSearchTesting] = useState(false);
+  const [searchTestResult, setSearchTestResult] = useState<boolean | null>(null);
+  const [searchSaved, setSearchSaved] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -123,6 +134,10 @@ export function SettingsModal() {
       setSaved(false);
       setChatModelInput(activeChatModel);
       setEmbedModelInput(activeEmbeddingModel);
+      setSerperKeyInput('');
+      setShowSerperKey(false);
+      setSearchTestResult(null);
+      setSearchSaved(false);
     }
   }, [isOpen, loadProviders, activeProvider, activeChatModel, activeEmbeddingModel]);
 
@@ -356,6 +371,24 @@ export function SettingsModal() {
     if (result) { await loadProviders(); }
   };
 
+  const handleSaveSerperKey = async () => {
+    if (!serperKeyInput.trim()) return;
+    await configureSerperKey(serperKeyInput.trim());
+    await loadSettings();
+    setSerperKeyInput('');
+    setSearchSaved(true);
+    setSearchTestResult(null);
+    setTimeout(() => setSearchSaved(false), 2000);
+  };
+
+  const handleTestSearch = async () => {
+    setSearchTesting(true);
+    setSearchTestResult(null);
+    const result = await testSearchConnection();
+    setSearchTestResult(result);
+    setSearchTesting(false);
+  };
+
   const saveChatModel = () => {
     if (chatModelInput.trim() && chatModelInput.trim() !== activeChatModel) {
       setChatModel(chatModelInput.trim());
@@ -408,6 +441,7 @@ export function SettingsModal() {
                     { id: 'providers' as Tab, label: 'Providers', icon: Server },
                     { id: 'chat' as Tab, label: 'Chat', icon: MessageSquare },
                     { id: 'embeddings' as Tab, label: 'Embeddings', icon: Database },
+                    { id: 'search' as Tab, label: 'Search', icon: Globe },
                     { id: 'transcription' as Tab, label: 'Transcription', icon: Mic },
                     { id: 'audio' as Tab, label: 'Audio', icon: Headphones },
                   ]).map(t => {
@@ -716,6 +750,98 @@ export function SettingsModal() {
                             </>
                           )}
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'search' && (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Globe size={14} className="text-accent-blue" />
+                        <span className="text-[12px] font-medium text-foreground-muted uppercase tracking-wider">Web Search</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[12px] text-foreground-muted block mb-1">Provider</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {SEARCH_PROVIDERS.map(sp => {
+                              const isSelected = searchProvider === sp.id;
+                              return (
+                                <button key={sp.id} onClick={() => setSearchProvider(sp.id)}
+                                  className={`p-3 rounded-lg border text-left transition-colors ${
+                                    isSelected ? 'border-accent-blue bg-accent-blue/5' : 'border-border hover:border-border-hover hover:bg-elevated/50'
+                                  }`}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[12px] font-medium text-foreground">{sp.name}</span>
+                                    <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                                      isSelected ? 'border-accent-blue' : 'border-foreground-muted/40'
+                                    }`}>
+                                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-accent-blue" />}
+                                    </div>
+                                  </div>
+                                  <div className="text-[10px] text-foreground-muted">{sp.desc}</div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {searchProvider === 'serper' && (
+                          <div className="space-y-3 border-t border-border pt-4">
+                            <div className="text-[13px] font-medium text-foreground">Serper Configuration</div>
+                            <div>
+                              <label className="text-[12px] text-foreground-muted block mb-1">API Key</label>
+                              {hasSerperApiKey && !serperKeyInput && (
+                                <div className="flex items-center gap-2 text-[12px] text-success mb-1.5">
+                                  <CheckCircle2 size={12} /> Key saved ({serperApiKey})
+                                </div>
+                              )}
+                              <div className="relative">
+                                <input type={showSerperKey ? 'text' : 'password'} value={serperKeyInput}
+                                  onChange={e => setSerperKeyInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') handleSaveSerperKey(); }}
+                                  placeholder={hasSerperApiKey ? 'Enter new key to replace...' : 'Enter Serper API key...'}
+                                  className="w-full px-3 py-2.5 pr-9 bg-input border border-border rounded-lg text-[13px] text-foreground placeholder:text-foreground-muted font-mono focus:ring-1 focus:ring-ring" />
+                                <button onClick={() => setShowSerperKey(!showSerperKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground-secondary">
+                                  {showSerperKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={handleSaveSerperKey} disabled={!serperKeyInput.trim()}
+                                className={`px-3 py-1.5 text-[13px] font-medium rounded-lg disabled:opacity-50 ${searchSaved ? 'bg-success/20 text-success' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`}>
+                                {searchSaved ? 'Saved!' : 'Save'}
+                              </button>
+                              <button onClick={handleTestSearch} disabled={searchTesting || !hasSerperApiKey}
+                                className="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-border hover:bg-elevated disabled:opacity-50 transition-colors">
+                                {searchTesting ? <Loader2 size={14} className="animate-spin" /> : 'Test connection'}
+                              </button>
+                              {searchTestResult === true && <CheckCircle2 size={16} className="text-success" />}
+                              {searchTestResult === false && <XCircle size={16} className="text-error" />}
+                            </div>
+                            <p className="text-[11px] text-foreground-muted">
+                              Get your key from serper.dev/api-key. Used for web source discovery and deep research.
+                            </p>
+                            <div>
+                              <label className="text-[12px] text-foreground-muted block mb-1">
+                                Deep research results per search direction
+                              </label>
+                              <select
+                                value={deepResearchSearchLimit}
+                                onChange={(e) => setDeepResearchSearchLimit(Number(e.target.value))}
+                                className="w-full px-3 py-2.5 bg-input border border-border rounded-lg text-[13px] text-foreground focus:ring-1 focus:ring-ring appearance-none cursor-pointer"
+                              >
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                  <option key={n} value={n}>{n} result{n === 1 ? '' : 's'}</option>
+                                ))}
+                              </select>
+                              <p className="text-[11px] text-foreground-muted mt-1">
+                                Each planned research area runs its own search. Total sources depend on areas × this limit.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

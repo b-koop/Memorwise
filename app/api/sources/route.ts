@@ -40,7 +40,7 @@ function headersToObject(headers: Headers): Record<string, string> {
 function parseMultipartUpload(req: Request): Promise<ParsedUpload> {
   if (!req.body) throw new UploadError('Missing request body', 400);
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memorwise-upload-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'thestacks-upload-'));
   const cleanup = () => fs.rmSync(tempDir, { recursive: true, force: true });
 
   return new Promise((resolve, reject) => {

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Trash2, Loader2, Link2, Eye, Code, BookmarkPlus } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
+import { useNotebookNav } from '@/components/navigation/NotebookNavigationProvider';
 import { toast } from '@/components/ui/Toast';
 import { confirm } from '@/components/ui/ConfirmDialog';
 import type { Note } from '@/lib/types';
@@ -14,6 +16,7 @@ interface Backlink {
 }
 
 export function NoteEditor({ noteId, notebookId }: { noteId: string; notebookId: string }) {
+  const { buildHref } = useNotebookNav();
   const [note, setNote] = useState<Note | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -174,11 +177,11 @@ export function NoteEditor({ noteId, notebookId }: { noteId: string; notebookId:
           </div>
           <div className="space-y-1">
             {backlinks.map(bl => (
-              <button key={bl.id}
-                onClick={() => window.dispatchEvent(new CustomEvent('memorwise:select-note', { detail: { noteId: bl.id } }))}
-                className="block text-[13px] text-accent-blue hover:underline cursor-pointer">
+              <Link key={bl.id}
+                href={buildHref({ view: 'notes', note: bl.id, tab: 'notes' })}
+                className="block text-[13px] text-accent-blue hover:underline">
                 {bl.title || 'Untitled'}
-              </button>
+              </Link>
             ))}
           </div>
         </div>

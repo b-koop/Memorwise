@@ -1,11 +1,11 @@
-# Memorwise
+# The Stacks
 
 A local, open-source alternative to NotebookLM. Chat with PDFs, images, audio, video, URLs, and YouTube links using any LLM provider. Your data stays on your machine.
 
 ## Install and Run
 
 ```bash
-npx memorwise
+npx the-stacks
 ```
 
 That's it. The installer clones the repo, installs dependencies, starts the dev server, and opens your browser.
@@ -13,27 +13,27 @@ That's it. The installer clones the repo, installs dependencies, starts the dev 
 ## Already Installed?
 
 ```bash
-npx memorwise
+npx the-stacks
 # or just:
-cd memorwise && npm run dev
+cd the-stacks && npm run dev
 ```
 
-If Memorwise is already on your machine, `npx memorwise` detects it and starts the server directly.
+If The Stacks is already on your machine, `npx the-stacks` detects it and starts the server directly.
 
 By default it also pulls the latest GitHub changes before starting. Use `--no-update` if you want to run the copy you already have.
 
 ## Custom Directory
 
 ```bash
-npx memorwise my-research
+npx the-stacks my-research
 ```
 
 ## Options
 
 ```bash
-npx memorwise --port 5000
-npx memorwise --no-open
-npx memorwise --no-update
+npx the-stacks --port 5000
+npx the-stacks --no-open
+npx the-stacks --no-update
 ```
 
 ## What You Get
@@ -52,8 +52,8 @@ npx memorwise --no-update
 
 ## Links
 
-- [GitHub](https://github.com/robzilla1738/Memorwise)
-- [Full Documentation](https://github.com/robzilla1738/Memorwise#readme)
+- [GitHub](https://github.com/b-koop/the-stacks)
+- [Full Documentation](https://github.com/b-koop/the-stacks#readme)
 
 ## License
 

@@ -17,7 +17,7 @@ interface ChatState {
   contextMeta: ContextMeta | null;
   recommendation: string | null;
 
-  loadSessions: (notebookId: string) => Promise<void>;
+  loadSessions: (notebookId: string, preferredSessionId?: string) => Promise<void>;
   createSession: (notebookId: string) => Promise<ChatSession>;
   deleteSession: (sessionId: string, notebookId: string) => Promise<void>;
   selectSession: (sessionId: string) => Promise<void>;
@@ -41,7 +41,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setFocusedSource: (sourceId: string | null) => set({ focusedSourceId: sourceId }),
 
-  loadSessions: async (notebookId: string) => {
+  loadSessions: async (notebookId: string, preferredSessionId?: string) => {
     const res = await fetch(`/api/chat/sessions?notebookId=${notebookId}`);
     if (!res.ok) return;
     const sessions = await res.json();
@@ -52,8 +52,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const session = await r.json();
       set({ sessions: [session], activeSessionId: session.id, messages: [] });
     } else {
-      set({ activeSessionId: sessions[0].id });
-      const r = await fetch(`/api/chat/sessions/${sessions[0].id}`);
+      const preferred = preferredSessionId
+        ? sessions.find((s: ChatSession) => s.id === preferredSessionId)
+        : null;
+      const session = preferred ?? sessions[0];
+      set({ activeSessionId: session.id });
+      const r = await fetch(`/api/chat/sessions/${session.id}`);
       if (!r.ok) return;
       set({ messages: await r.json() });
     }

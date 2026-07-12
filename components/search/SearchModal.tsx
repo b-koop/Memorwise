@@ -1,15 +1,19 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, FileText, StickyNote, MessageSquare, X } from 'lucide-react';
 import { useNotebookStore } from '@/stores/notebook-store';
+import { useOptionalNotebookNav } from '@/components/navigation/NotebookNavigationProvider';
+import { buildNotebookUrl, type NotebookUrlState } from '@/lib/navigation/url-state';
 
 interface SearchResult {
   id: string;
   type: 'source' | 'note' | 'message';
   title: string;
   snippet: string;
+  sessionId?: string;
 }
 
 const typeIcons = {
@@ -24,7 +28,47 @@ const typeLabels = {
   message: 'Messages',
 };
 
+function resultHref(
+  notebookId: string,
+  result: SearchResult,
+  buildHref?: (partial: Partial<NotebookUrlState>) => string,
+) {
+  if (buildHref) {
+    if (result.type === 'note') {
+      return buildHref({ view: 'notes', note: result.id, tab: 'notes' });
+    }
+    if (result.type === 'source') {
+      return buildHref({ source: result.id });
+    }
+    if (result.type === 'message' && result.sessionId) {
+      return buildHref({ view: 'chat', session: result.sessionId, note: null });
+    }
+  }
+
+  if (result.type === 'note') {
+    return buildNotebookUrl('/', {
+      notebook: notebookId,
+      view: 'notes',
+      note: result.id,
+      tab: 'notes',
+    });
+  }
+  if (result.type === 'source') {
+    return buildNotebookUrl('/', { notebook: notebookId, source: result.id });
+  }
+  if (result.type === 'message' && result.sessionId) {
+    return buildNotebookUrl('/', {
+      notebook: notebookId,
+      view: 'chat',
+      session: result.sessionId,
+    });
+  }
+  return buildNotebookUrl('/', { notebook: notebookId });
+}
+
 export function SearchModal() {
+  const router = useRouter();
+  const nav = useOptionalNotebookNav();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -64,10 +108,10 @@ export function SearchModal() {
     const handleCustomOpen = () => openModal();
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('memorwise:open-search', handleCustomOpen);
+    window.addEventListener('stacks:open-search', handleCustomOpen);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('memorwise:open-search', handleCustomOpen);
+      window.removeEventListener('stacks:open-search', handleCustomOpen);
     };
   }, [open, openModal, closeModal]);
 
@@ -111,9 +155,11 @@ export function SearchModal() {
   }, [query, selectedNotebookId]);
 
   const handleResultClick = (result: SearchResult) => {
+    if (!selectedNotebookId) return;
     closeModal();
-    window.dispatchEvent(
-      new CustomEvent('memorwise:search-navigate', { detail: result })
+    router.push(
+      resultHref(selectedNotebookId, result, nav?.buildHref),
+      { scroll: false },
     );
   };
 
@@ -133,7 +179,6 @@ export function SearchModal() {
     );
   };
 
-  // Group results by type
   const grouped = results.reduce<Record<string, SearchResult[]>>((acc, r) => {
     if (!acc[r.type]) acc[r.type] = [];
     acc[r.type].push(r);
@@ -151,10 +196,8 @@ export function SearchModal() {
           className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
           onClick={closeModal}
         >
-          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -163,7 +206,6 @@ export function SearchModal() {
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
           >
-            {/* Search Input */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
               <Search size={18} className="text-foreground-muted shrink-0" />
               <input
@@ -187,7 +229,6 @@ export function SearchModal() {
               </kbd>
             </div>
 
-            {/* Results */}
             <div className="max-h-[50vh] overflow-y-auto">
               {loading && query.trim() && (
                 <div className="px-4 py-6 text-center text-sm text-foreground-muted">

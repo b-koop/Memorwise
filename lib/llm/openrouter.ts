@@ -13,7 +13,7 @@ export class OpenRouterProvider implements LLMProvider {
     this.client = key ? new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: key,
-      defaultHeaders: { 'HTTP-Referer': 'https://memorwise.local', 'X-Title': 'Memorwise' },
+      defaultHeaders: { 'HTTP-Referer': 'https://thestacks.local', 'X-Title': 'The Stacks' },
     }) : null;
   }
   getApiKey() { return this.apiKey; }

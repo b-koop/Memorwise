@@ -20,6 +20,7 @@ interface NotebookState {
 	selectNotebook: (id: string | null) => Promise<void>;
 	addSource: (files: FileList | File[]) => Promise<void>;
 	addUrlSource: (url: string) => Promise<void>;
+	addUrlSources: (urls: string[]) => Promise<number>;
 	deleteSource: (sourceId: string) => Promise<void>;
 	refreshSources: () => Promise<void>;
 
@@ -168,6 +169,22 @@ export const useNotebookStore = create<NotebookState>((set, get) => ({
 		}
 		const source = await res.json();
 		set((s) => ({ sources: [source, ...s.sources] }));
+	},
+
+	addUrlSources: async (urls: string[]) => {
+		const unique = Array.from(
+			new Set(urls.map((url) => url.trim()).filter(Boolean)),
+		);
+		let imported = 0;
+		for (const url of unique) {
+			try {
+				await get().addUrlSource(url);
+				imported += 1;
+			} catch {
+				// Skip URLs that fail extraction or import.
+			}
+		}
+		return imported;
 	},
 
 	deleteSource: async (sourceId: string) => {

@@ -1,30 +1,39 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { useNotebookStore } from "@/stores/notebook-store";
+import { useNotebookNav } from "@/components/navigation/NotebookNavigationProvider";
+import type { CenterView } from "@/lib/navigation/url-state";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { GraphView } from "@/components/graph/GraphView";
 import { NoteEditor } from "@/components/notes/NoteEditor";
+import { ResearchView } from "@/components/research/ResearchView";
 import { FlashcardView } from "@/components/flashcards/FlashcardView";
 import { QuizView } from "@/components/quiz/QuizView";
 import { SourceViewer } from "@/components/sources/SourceViewer";
 import { toast } from "@/components/ui/Toast";
 import { useEffect } from "react";
-import { StickyNote, MessageSquare, Network } from "lucide-react";
+import { StickyNote, MessageSquare, Network, Search } from "lucide-react";
 
-export type CenterView = "chat" | "notes" | "graph" | "flashcards" | "quiz";
+export type { CenterView };
 
 interface MainLayoutProps {
 	activeView: CenterView;
 	setActiveView: (view: CenterView) => void;
+	selectedNoteId: string | null;
 }
 
-export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
+export function MainLayout({
+	activeView,
+	setActiveView,
+	selectedNoteId,
+}: MainLayoutProps) {
 	const { selectedNotebookId, viewingSource, setViewingSource, addSource } =
 		useNotebookStore();
+	const { replaceNotebookUrl, buildHref } = useNotebookNav();
 
-	const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 
 	// Listen for note selection from sidebar
@@ -32,13 +41,12 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
 		const handler = (e: Event) => {
 			const detail = (e as CustomEvent).detail;
 			if (detail?.noteId) {
-				setSelectedNoteId(detail.noteId);
-				setActiveView("notes");
+				replaceNotebookUrl({ view: "notes", note: detail.noteId });
 			}
 		};
-		window.addEventListener("memorwise:select-note", handler);
-		return () => window.removeEventListener("memorwise:select-note", handler);
-	}, [setActiveView]);
+		window.addEventListener("stacks:select-note", handler);
+		return () => window.removeEventListener("stacks:select-note", handler);
+	}, [replaceNotebookUrl]);
 
 	const handleDragOver = useCallback((e: React.DragEvent) => {
 		e.preventDefault();
@@ -93,11 +101,16 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
 					[
 						{ key: "chat", label: "Chat", icon: MessageSquare },
 						{ key: "graph", label: "Graph", icon: Network },
+						{ key: "research", label: "Research", icon: Search },
 					] as const
 				).map((tab) => (
-					<button
+					<Link
 						key={tab.key}
-						onClick={() => setActiveView(tab.key)}
+						href={buildHref({
+							view: tab.key,
+							note: null,
+							session: null,
+						})}
 						className={`flex items-center gap-2 px-3 py-1.5 text-[13px] rounded-md transition-colors ${
 							activeView === tab.key
 								? "bg-elevated text-foreground"
@@ -106,7 +119,7 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
 					>
 						<tab.icon size={14} />
 						{tab.label}
-					</button>
+					</Link>
 				))}
 			</div>
 
@@ -116,6 +129,9 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
 					{activeView === "chat" && <ChatPanel />}
 					{activeView === "graph" && (
 						<GraphView notebookId={selectedNotebookId} />
+					)}
+					{activeView === "research" && (
+						<ResearchView notebookId={selectedNotebookId} />
 					)}
 					{activeView === "flashcards" && (
 						<FlashcardView notebookId={selectedNotebookId} />
@@ -151,7 +167,10 @@ export function MainLayout({ activeView, setActiveView }: MainLayoutProps) {
 					{viewingSource && (
 						<SourceViewer
 							source={viewingSource}
-							onClose={() => setViewingSource(null)}
+							onClose={() => {
+								setViewingSource(null);
+								replaceNotebookUrl({ source: null });
+							}}
 						/>
 					)}
 				</AnimatePresence>

@@ -25,6 +25,7 @@ class ProviderRegistry {
   readonly groq = new GroqProvider();
   readonly mistral = new MistralProvider();
   private providers = new Map<string, LLMProvider>();
+  private serperApiKey = '';
   private loaded = false;
 
   constructor() {
@@ -60,6 +61,8 @@ class ProviderRegistry {
       if (groqKey) this.groq.setApiKey(groqKey);
       const mistralKey = getSetting('mistral_api_key');
       if (mistralKey) this.mistral.setApiKey(mistralKey);
+      const serperKey = getSetting('serper_api_key');
+      if (serperKey) this.serperApiKey = serperKey;
     } catch { /* DB not ready yet */ }
   }
 
@@ -101,6 +104,25 @@ class ProviderRegistry {
   getKokoroVoice(): string { return getSetting('kokoro_voice') || 'af_heart'; }
   getPodcastSpeakers(): number { const v = getSetting('podcast_speakers'); return v ? parseInt(v) : 2; }
   setPodcastSpeakers(n: number) { setSetting('podcast_speakers', String(Math.min(4, Math.max(1, n)))); }
+  getSearchProvider(): string { return getSetting('search_provider') || 'serper'; }
+  getSerperApiKey(): string { this.ensureLoaded(); return this.serperApiKey; }
+  isSearchAvailable(): boolean { return !!this.getSerperApiKey().trim(); }
+  getSearchConfig(): { searchProvider: string; serperApiKey: string; hasSerperApiKey: boolean; searchAvailable: boolean; deepResearchSearchLimit: number } {
+    this.ensureLoaded();
+    const key = this.serperApiKey;
+    return {
+      searchProvider: this.getSearchProvider(),
+      serperApiKey: maskKey(key),
+      hasSerperApiKey: !!key,
+      searchAvailable: !!key.trim(),
+      deepResearchSearchLimit: this.getDeepResearchSearchLimit(),
+    };
+  }
+  getDeepResearchSearchLimit(): number {
+    const v = getSetting('deep_research_search_limit');
+    const parsed = v ? parseInt(v, 10) : 5;
+    return Math.min(10, Math.max(1, Number.isFinite(parsed) ? parsed : 5));
+  }
 
   setActiveProvider(id: string) { setSetting('active_provider', id); }
   setActiveChatModel(m: string) { setSetting('active_chat_model', m); }
@@ -112,6 +134,11 @@ class ProviderRegistry {
   setTTSVoice(voice: string) { setSetting('tts_voice', voice); }
   setKokoroUrl(url: string) { setSetting('kokoro_url', url); }
   setKokoroVoice(voice: string) { setSetting('kokoro_voice', voice); }
+  setSearchProvider(id: string) { setSetting('search_provider', id); }
+  setSerperApiKey(key: string) { this.serperApiKey = key; setSetting('serper_api_key', key); }
+  setDeepResearchSearchLimit(n: number) {
+    setSetting('deep_research_search_limit', String(Math.min(10, Math.max(1, Math.floor(n)))));
+  }
 
   setProviderConfig(providerId: string, config: { apiKey?: string; baseUrl?: string }) {
     switch (providerId) {
@@ -148,8 +175,8 @@ class ProviderRegistry {
 }
 
 // Survive Next.js HMR — singleton on globalThis
-const globalForRegistry = globalThis as unknown as { __memorwise_registry?: ProviderRegistry };
-if (!globalForRegistry.__memorwise_registry) {
-  globalForRegistry.__memorwise_registry = new ProviderRegistry();
+const globalForRegistry = globalThis as unknown as { __thestacks_registry?: ProviderRegistry };
+if (!globalForRegistry.__thestacks_registry) {
+  globalForRegistry.__thestacks_registry = new ProviderRegistry();
 }
-export const registry = globalForRegistry.__memorwise_registry;
+export const registry = globalForRegistry.__thestacks_registry;

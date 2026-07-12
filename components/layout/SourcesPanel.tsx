@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
 	Plus,
@@ -25,6 +26,8 @@ import {
 	X,
 } from "lucide-react";
 import { useNotebookStore } from "@/stores/notebook-store";
+import { useNotebookNav } from "@/components/navigation/NotebookNavigationProvider";
+import type { SidebarTab } from "@/lib/navigation/url-state";
 import { toast } from "@/components/ui/Toast";
 import { confirm } from "@/components/ui/ConfirmDialog";
 import type { Source } from "@/lib/types";
@@ -144,7 +147,7 @@ function StatusBadge({ status }: { status: Source["status"] }) {
 	}
 }
 
-export function SourcesPanel() {
+export function SourcesPanel({ sidebarTab }: { sidebarTab: SidebarTab }) {
 	const {
 		selectedNotebookId,
 		sources,
@@ -154,6 +157,7 @@ export function SourcesPanel() {
 		refreshSources,
 		setViewingSource,
 	} = useNotebookStore();
+	const { replaceNotebookUrl, buildHref } = useNotebookNav();
 
 	const [urlValue, setUrlValue] = useState("");
 	const [urlLoading, setUrlLoading] = useState(false);
@@ -163,7 +167,6 @@ export function SourcesPanel() {
 		"direct" | "agent" | null
 	>(null);
 	const [hoveredSourceId, setHoveredSourceId] = useState<string | null>(null);
-	const [sidebarTab, setSidebarTab] = useState<"sources" | "notes">("sources");
 	const [notesList, setNotesList] = useState<any[]>([]);
 	const [notesLoading, setNotesLoading] = useState(false);
 	const [creatingNote, setCreatingNote] = useState(false);
@@ -215,11 +218,11 @@ export function SourcesPanel() {
 				const note = await res.json();
 				setNotesList((prev) => [note, ...prev]);
 				setShowTemplates(false);
-				window.dispatchEvent(
-					new CustomEvent("memorwise:select-note", {
-						detail: { noteId: note.id },
-					}),
-				);
+				replaceNotebookUrl({
+					view: "notes",
+					note: note.id,
+					tab: "notes",
+				});
 			}
 		} catch {
 			// Ignore transient note creation failures; the user can retry from the same button.
@@ -250,6 +253,17 @@ export function SourcesPanel() {
 
 		return () => clearInterval(interval);
 	}, [sources, refreshSources]);
+
+	useEffect(() => {
+		const clearDiscover = () => {
+			setUrlValue("");
+			setDiscoveryQuery("");
+			setUrlError(null);
+		};
+		window.addEventListener("stacks:clear-discover-urls", clearDiscover);
+		return () =>
+			window.removeEventListener("stacks:clear-discover-urls", clearDiscover);
+	}, []);
 
 	const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files && e.target.files.length > 0) {
@@ -347,6 +361,12 @@ export function SourcesPanel() {
 			const merged = [...getUrlsFromInput(current), ...urls];
 			return Array.from(new Set(merged)).join("\n");
 		});
+	};
+
+	const clearDiscoverUrls = () => {
+		setUrlValue("");
+		setDiscoveryQuery("");
+		setUrlError(null);
 	};
 
 	const handleDiscoverSources = async (mode: "direct" | "agent") => {
@@ -457,8 +477,8 @@ export function SourcesPanel() {
 				{/* Header with tabs */}
 				<div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
 					<div className="flex items-center bg-elevated rounded-md p-0.5">
-						<button
-							onClick={() => setSidebarTab("sources")}
+						<Link
+							href={buildHref({ tab: "sources" })}
 							className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
 								sidebarTab === "sources"
 									? "bg-card text-foreground shadow-sm"
@@ -466,9 +486,9 @@ export function SourcesPanel() {
 							}`}
 						>
 							Sources
-						</button>
-						<button
-							onClick={() => setSidebarTab("notes")}
+						</Link>
+						<Link
+							href={buildHref({ tab: "notes" })}
 							className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
 								sidebarTab === "notes"
 									? "bg-card text-foreground shadow-sm"
@@ -476,7 +496,7 @@ export function SourcesPanel() {
 							}`}
 						>
 							Notes
-						</button>
+						</Link>
 					</div>
 					<button
 						className="p-1.5 rounded-md hover:bg-elevated text-foreground-muted hover:text-foreground-secondary transition-colors"
@@ -560,16 +580,14 @@ export function SourcesPanel() {
 									</div>
 								) : (
 									notesList.map((n: any) => (
-										<div
+										<Link
 											key={n.id}
-											onClick={() => {
-												window.dispatchEvent(
-													new CustomEvent("memorwise:select-note", {
-														detail: { noteId: n.id },
-													}),
-												);
-											}}
-											className="px-3 py-2.5 rounded-lg text-[13px] hover:bg-elevated transition-colors cursor-pointer"
+											href={buildHref({
+												view: "notes",
+												note: n.id,
+												tab: "notes",
+											})}
+											className="block px-3 py-2.5 rounded-lg text-[13px] hover:bg-elevated transition-colors cursor-pointer"
 										>
 											<div className="flex items-center gap-2">
 												<StickyNote
@@ -583,7 +601,7 @@ export function SourcesPanel() {
 											<div className="text-[11px] text-foreground-muted mt-0.5 truncate pl-5">
 												{n.content ? n.content.slice(0, 60) + "..." : "Empty"}
 											</div>
-										</div>
+										</Link>
 									))
 								)}
 							</div>
@@ -628,9 +646,21 @@ export function SourcesPanel() {
 
 							{/* Web discovery */}
 							<div className="space-y-2 rounded-lg border border-border bg-elevated/30 p-2.5">
-								<label className="text-[11px] uppercase tracking-wider text-foreground-muted">
-									Discover URLs
-								</label>
+								<div className="flex items-center justify-between gap-2">
+									<label className="text-[11px] uppercase tracking-wider text-foreground-muted">
+										Discover URLs
+									</label>
+									{(discoveryQuery || urlCount > 0) && (
+										<button
+											type="button"
+											onClick={clearDiscoverUrls}
+											disabled={!!discoveryLoading || urlLoading}
+											className="text-[11px] text-foreground-muted hover:text-foreground-secondary disabled:opacity-40"
+										>
+											Clear
+										</button>
+									)}
+								</div>
 								<div className="relative">
 									<Search
 										size={14}
@@ -798,11 +828,16 @@ export function SourcesPanel() {
 											}}
 											onMouseEnter={() => setHoveredSourceId(src.id)}
 											onMouseLeave={() => setHoveredSourceId(null)}
-											onClick={() => setViewingSource(src)}
 											className="group flex items-center gap-2 px-3 py-2.5 rounded-lg text-[13px] text-foreground-secondary hover:bg-elevated transition-colors cursor-grab active:cursor-grabbing"
 										>
-											{getFileIcon(src)}
-											<span className="truncate flex-1">{src.filename}</span>
+											<Link
+												href={buildHref({ source: src.id })}
+												onClick={() => setViewingSource(src)}
+												className="flex min-w-0 flex-1 items-center gap-2"
+											>
+												{getFileIcon(src)}
+												<span className="truncate flex-1">{src.filename}</span>
+											</Link>
 											<div className="flex items-center gap-1.5">
 												<StatusBadge status={src.status} />
 												{hoveredSourceId === src.id && (

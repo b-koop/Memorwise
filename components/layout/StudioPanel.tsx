@@ -286,7 +286,7 @@ export function StudioPanel({ notebookId, onViewChange }: StudioPanelProps) {
                         } else if (isInteractive) {
                           try {
                             const data = JSON.parse(gen.content);
-                            window.dispatchEvent(new CustomEvent('memorwise:load-generation', { detail: { type: gen.type, data } }));
+                            window.dispatchEvent(new CustomEvent('stacks:load-generation', { detail: { type: gen.type, data } }));
                           } catch { /* invalid JSON, just open view */ }
                           onViewChange(gen.type);
                         } else {
