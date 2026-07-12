@@ -107,6 +107,18 @@ export function runMigrations(db: Database.Database) {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS research_runs (
+      id TEXT PRIMARY KEY,
+      notebook_id TEXT REFERENCES notebooks(id) ON DELETE CASCADE,
+      question TEXT NOT NULL,
+      status TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS openbrain_thoughts (
       id TEXT PRIMARY KEY,
       title TEXT DEFAULT '',

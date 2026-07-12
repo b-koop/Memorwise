@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import {
   ReactFlow,
   Background,
@@ -15,6 +16,7 @@ import GraphNodeComponent from '@/components/graph/GraphNode';
 import { Loader2, X, Copy, FileText, MessageSquare, Check } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { useNotebookStore } from '@/stores/notebook-store';
+import { useNotebookNav } from '@/components/navigation/NotebookNavigationProvider';
 
 interface RawNode {
   id: string;
@@ -262,6 +264,7 @@ function DetailPanel({ selectedNode, connectedItems, conceptInsight, setConceptI
   const [panelWidth, setPanelWidth] = useState(340);
   const [copied, setCopied] = useState(false);
   const { createNote } = useNotebookStore();
+  const { replaceNotebookUrl, buildHref } = useNotebookNav();
 
   const handleResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -293,13 +296,13 @@ function DetailPanel({ selectedNode, connectedItems, conceptInsight, setConceptI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: `# ${selectedNode.label}\n\n${conceptInsight}` }),
       });
-      window.dispatchEvent(new CustomEvent('memorwise:select-note', { detail: { noteId: note.id } }));
+      replaceNotebookUrl({ view: 'notes', note: note.id, tab: 'notes' });
     } catch {}
   };
 
   const handleSendToChat = () => {
-    // Dispatch a custom event that ChatPanel can listen for to pre-fill input
-    window.dispatchEvent(new CustomEvent('memorwise:prefill-chat', {
+    replaceNotebookUrl({ view: 'chat' });
+    window.dispatchEvent(new CustomEvent('stacks:prefill-chat', {
       detail: { text: `Tell me more about "${selectedNode.label}" based on my documents.` }
     }));
   };
@@ -359,6 +362,21 @@ function DetailPanel({ selectedNode, connectedItems, conceptInsight, setConceptI
 
         <h3 className="text-sm font-semibold text-foreground mb-2">{selectedNode.label}</h3>
 
+        {(selectedNode.type === 'note' || selectedNode.type === 'source') && (
+          <div className="mb-3">
+            <Link
+              href={
+                selectedNode.type === 'note'
+                  ? buildHref({ view: 'notes', note: selectedNode.id, tab: 'notes' })
+                  : buildHref({ source: selectedNode.id })
+              }
+              className="inline-flex items-center text-[12px] font-medium text-accent-blue hover:underline"
+            >
+              Open {selectedNode.type}
+            </Link>
+          </div>
+        )}
+
         {selectedNode.summary && (
           <p className="text-[12px] text-foreground-secondary mb-3 leading-relaxed">{selectedNode.summary}</p>
         )}
@@ -371,13 +389,23 @@ function DetailPanel({ selectedNode, connectedItems, conceptInsight, setConceptI
             </p>
             <div className="space-y-1">
               {connectedItems.map(item => (
-                <div key={item.id} className="flex items-center gap-2 px-2 py-1.5 bg-elevated rounded-lg text-[12px]">
+                <Link
+                  key={item.id}
+                  href={
+                    item.type === 'note'
+                      ? buildHref({ view: 'notes', note: item.id, tab: 'notes' })
+                      : item.type === 'source'
+                        ? buildHref({ source: item.id })
+                        : buildHref({ view: 'graph' })
+                  }
+                  className="flex items-center gap-2 px-2 py-1.5 bg-elevated rounded-lg text-[12px] hover:bg-card transition-colors"
+                >
                   <span className={`w-2 h-2 rounded-full shrink-0 ${
                     item.type === 'concept' ? 'bg-purple-400' :
                     item.type === 'source' ? 'bg-red-400' : 'bg-blue-400'
                   }`} />
                   <span className="text-foreground-secondary truncate">{item.label}</span>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

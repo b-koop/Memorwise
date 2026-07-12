@@ -29,10 +29,10 @@ function getSafeDiscoveryError(err: unknown): {
 	status: number;
 } {
 	const message = err instanceof Error ? err.message : "";
-	if (message.includes("SERPER_API_KEY")) {
+	if (message.includes("Serper API key is not configured")) {
 		return {
 			error:
-				"Web discovery is not configured. Set SERPER_API_KEY in the server environment.",
+				"Web discovery is not configured. Add your Serper API key in Settings → Search.",
 			status: 500,
 		};
 	}

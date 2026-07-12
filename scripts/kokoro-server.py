@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Kokoro TTS Local Server for Memorwise.
+Kokoro TTS Local Server for The Stacks.
 Run: pip install kokoro>=0.9.2 soundfile flask
 Then: python scripts/kokoro-server.py
 """

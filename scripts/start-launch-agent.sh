@@ -1,18 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# LaunchAgent entrypoint for running Memorwise directly from this checkout.
+# LaunchAgent entrypoint for running The Stacks directly from this checkout.
 # Keeping this logic in-repo means local changes to startup behavior take effect
-# the next time launchd restarts com.benjaminkoop.memorwise.
+# the next time launchd restarts com.benjaminkoop.thestacks.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PORT="${THE_STACKS_PORT:-4747}"
 
 export HOME="${HOME:-/Users/benjaminkoop}"
 export NODE_ENV=production
-export MEMORWISE_DATA_DIR="${MEMORWISE_DATA_DIR:-$HOME/.memorwise/.memorwise}"
+export THE_STACKS_DATA_DIR="${THE_STACKS_DATA_DIR:-$HOME/.the-stacks}"
 
 cd "$REPO_ROOT"
+
+# Free the port if a stale dev/prod process is still bound.
+if command -v lsof >/dev/null 2>&1; then
+	lsof -ti:"$PORT" | xargs kill -9 2>/dev/null || true
+fi
+
+# Production server requires a build artifact.
+if [ ! -f "$REPO_ROOT/.next/BUILD_ID" ]; then
+	npm run build
+fi
 
 web_pid=""
 mcp_pid=""
@@ -36,7 +47,7 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-node node_modules/next/dist/bin/next start --port 4747 &
+node node_modules/next/dist/bin/next start --port "$PORT" &
 web_pid=$!
 
 node mcp-server.js &

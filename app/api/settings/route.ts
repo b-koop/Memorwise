@@ -14,6 +14,7 @@ export async function GET() {
     kokoroUrl: registry.getKokoroUrl(),
     kokoroVoice: registry.getKokoroVoice(),
     podcastSpeakers: registry.getPodcastSpeakers(),
+    ...registry.getSearchConfig(),
   });
 }
 
@@ -30,5 +31,8 @@ export async function PATCH(req: Request) {
   if (body.kokoroUrl) registry.setKokoroUrl(body.kokoroUrl);
   if (body.kokoroVoice) registry.setKokoroVoice(body.kokoroVoice);
   if (body.podcastSpeakers) registry.setPodcastSpeakers(body.podcastSpeakers);
+  if (body.searchProvider) registry.setSearchProvider(body.searchProvider);
+  if (body.serperApiKey) registry.setSerperApiKey(body.serperApiKey);
+  if (body.deepResearchSearchLimit !== undefined) registry.setDeepResearchSearchLimit(body.deepResearchSearchLimit);
   return NextResponse.json({ success: true });
 }

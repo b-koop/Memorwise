@@ -1,3 +1,5 @@
+import { registry } from '@/lib/llm/provider-registry';
+
 export interface SerperSearchResult {
 	title: string;
 	url: string;
@@ -44,10 +46,10 @@ export async function searchSerper(
 	query: string,
 	limit = 5,
 ): Promise<SerperSearchResult[]> {
-	const apiKey = process.env.SERPER_API_KEY?.trim();
+	const apiKey = registry.getSerperApiKey().trim();
 	if (!apiKey) {
 		throw new Error(
-			"SERPER_API_KEY is not configured. Set it in your environment before using web discovery.",
+			"Serper API key is not configured. Add your key in Settings → Search.",
 		);
 	}
 

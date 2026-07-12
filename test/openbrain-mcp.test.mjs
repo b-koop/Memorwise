@@ -32,7 +32,7 @@ async function startMcpServer({ dataDir } = {}) {
 		env: {
 			...process.env,
 			MCP_PORT: String(port),
-			MEMORWISE_DATA_DIR: resolvedDataDir,
+			THE_STACKS_DATA_DIR: resolvedDataDir,
 		},
 		stdio: ["ignore", "pipe", "pipe"],
 	});

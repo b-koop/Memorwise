@@ -7,7 +7,7 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
-    const saved = localStorage.getItem('memorwise-theme') as 'dark' | 'light' | null;
+    const saved = localStorage.getItem('stacks-theme') as 'dark' | 'light' | null;
     if (saved) {
       setTheme(saved);
       document.documentElement.className = saved;
@@ -18,7 +18,7 @@ export function ThemeToggle() {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
     document.documentElement.className = next;
-    localStorage.setItem('memorwise-theme', next);
+    localStorage.setItem('stacks-theme', next);
   };
 
   return (

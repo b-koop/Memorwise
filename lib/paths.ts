@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { randomUUID } from 'crypto';
 
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+$/;
@@ -29,14 +30,15 @@ export function sanitizeFilename(filename: string, fallback = 'source.txt'): str
   return trimmed || fallback;
 }
 
-const DATA_DIR = process.env.MEMORWISE_DATA_DIR || path.join(process.cwd(), '.memorwise');
+const DATA_DIR =
+  process.env.THE_STACKS_DATA_DIR || path.join(os.homedir(), '.the-stacks');
 
 export function getDataDir() {
   return ensureDir(DATA_DIR);
 }
 
 export function getDbPath() {
-  return path.join(getDataDir(), 'memorwise.db');
+  return path.join(getDataDir(), 'thestacks.db');
 }
 
 export function getLanceDbPath() {

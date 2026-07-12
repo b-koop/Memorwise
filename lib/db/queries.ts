@@ -1,6 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from './index';
 import type { Notebook, Source, ChatSession, Message, Folder, Tag, TagAssignment, Link, Note } from '../types';
+import type { ResearchRun } from '../deep-research';
 
 // --- Notebooks ---
 export function listNotebooks(): Notebook[] {
@@ -241,6 +242,36 @@ export function saveGeneration(notebookId: string, type: string, title: string, 
 }
 export function deleteGeneration(id: string): void {
   getDb().prepare('DELETE FROM generations WHERE id = ?').run(id);
+}
+
+// --- Research Runs ---
+export function saveResearchRun(notebookId: string | null, run: ResearchRun): ResearchRun {
+  const payload = JSON.stringify(run);
+  getDb().prepare(`
+    INSERT INTO research_runs (id, notebook_id, question, status, payload)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      notebook_id = excluded.notebook_id,
+      question = excluded.question,
+      status = excluded.status,
+      payload = excluded.payload,
+      updated_at = datetime('now')
+  `).run(run.id, notebookId, run.question ?? '', run.status, payload);
+  return run;
+}
+
+export function getResearchRun(id: string): ResearchRun | undefined {
+  const row = getDb().prepare('SELECT payload FROM research_runs WHERE id = ?').get(id) as { payload: string } | undefined;
+  return row ? JSON.parse(row.payload) as ResearchRun : undefined;
+}
+
+export function listResearchRuns(notebookId: string): ResearchRun[] {
+  const rows = getDb().prepare('SELECT payload FROM research_runs WHERE notebook_id = ? ORDER BY updated_at DESC').all(notebookId) as { payload: string }[];
+  return rows.map((row) => JSON.parse(row.payload) as ResearchRun);
+}
+
+export function deleteResearchRun(id: string): void {
+  getDb().prepare('DELETE FROM research_runs WHERE id = ?').run(id);
 }
 
 // --- Note Templates ---

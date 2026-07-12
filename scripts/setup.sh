@@ -1,12 +1,12 @@
 #!/bin/bash
-# Memorwise Setup Script
+# The Stacks Setup Script
 # Run: chmod +x scripts/setup.sh && ./scripts/setup.sh
 
 set -e
 
 echo ""
 echo "  ╔══════════════════════════════════════╗"
-echo "  ║         Memorwise Setup              ║"
+echo "  ║         The Stacks Setup              ║"
 echo "  ║   Local notebook for documents       ║"
 echo "  ╚══════════════════════════════════════╝"
 echo ""
@@ -65,11 +65,15 @@ npm run build
 echo ""
 echo "  ✅ Setup complete!"
 echo ""
-echo "  To start Memorwise:"
+echo "  To start The Stacks:"
 echo "    npm run dev        (development)"
 echo "    npm start          (production)"
 echo ""
 echo "  Then open http://localhost:4747"
+echo "  Or http://local.thestacks.com:4747 after DNS setup"
+echo ""
+echo "  Local DNS (one-time, requires sudo):"
+echo "    sudo bash scripts/setup-local-dns.sh"
 echo ""
 echo "  First time? Go to Settings (⚙️) and configure"
 echo "  at least one LLM provider to get started."

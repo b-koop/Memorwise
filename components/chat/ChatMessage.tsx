@@ -76,7 +76,7 @@ export function ChatMessage({ message, isStreaming, onFork }: ChatMessageProps) 
       {/* AI label */}
       <div className="flex items-center gap-1.5 mb-1.5">
         <img src="/logo-mark.png" alt="" className="w-[22px] h-[22px] object-contain logo-adaptive opacity-60" />
-        <span className="text-[12px] font-medium text-foreground-muted">Memorwise</span>
+        <span className="text-[12px] font-medium text-foreground-muted">The Stacks</span>
       </div>
 
       {/* Content */}

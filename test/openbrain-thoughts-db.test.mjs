@@ -6,7 +6,7 @@ import test from "node:test";
 
 // The db module binds its data dir at module scope, so this must be set
 // before anything from lib is imported.
-process.env.MEMORWISE_DATA_DIR = fs.mkdtempSync(
+process.env.THE_STACKS_DATA_DIR = fs.mkdtempSync(
 	path.join(os.tmpdir(), "openbrain-test-"),
 );
 

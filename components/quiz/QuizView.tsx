@@ -32,8 +32,8 @@ export function QuizView({ notebookId }: { notebookId: string }) {
         setGenerated(true);
       }
     };
-    window.addEventListener('memorwise:load-generation', handler);
-    return () => window.removeEventListener('memorwise:load-generation', handler);
+    window.addEventListener('stacks:load-generation', handler);
+    return () => window.removeEventListener('stacks:load-generation', handler);
   }, []);
 
   const generate = async () => {

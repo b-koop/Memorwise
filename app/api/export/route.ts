@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     const messages = queries.getMessages(id);
     let md = `# Chat Export\n\n`;
     for (const m of messages) {
-      md += `## ${m.role === 'user' ? 'You' : 'Memorwise'}\n\n${m.content}\n\n---\n\n`;
+      md += `## ${m.role === 'user' ? 'You' : 'The Stacks'}\n\n${m.content}\n\n---\n\n`;
     }
     return new Response(md, {
       headers: {
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   const exportData: Record<string, string> = {};
 
   // README
-  exportData['README.md'] = `# ${notebook.name}\n\nExported from Memorwise on ${new Date().toISOString()}\n\n## Contents\n- ${sources.length} sources\n- ${notes.length} notes\n- ${sessions.length} chat sessions\n`;
+  exportData['README.md'] = `# ${notebook.name}\n\nExported from The Stacks on ${new Date().toISOString()}\n\n## Contents\n- ${sources.length} sources\n- ${notes.length} notes\n- ${sessions.length} chat sessions\n`;
 
   // Notes as markdown
   for (const note of notes) {
@@ -62,7 +62,7 @@ export async function GET(req: Request) {
     const messages = queries.getMessages(session.id);
     let md = `# ${session.title || 'Chat'}\n\n`;
     for (const m of messages) {
-      md += `**${m.role === 'user' ? 'You' : 'Memorwise'}:**\n\n${m.content || ''}\n\n---\n\n`;
+      md += `**${m.role === 'user' ? 'You' : 'The Stacks'}:**\n\n${m.content || ''}\n\n---\n\n`;
     }
     const safeName = (session.title || 'chat').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
     exportData[`chats/${safeName}.md`] = md;

@@ -438,7 +438,7 @@ async function extractReddit(url: string): Promise<ExtractedContent> {
   try {
     const res = await fetchPublicUrl(jsonUrl, {
       headers: {
-        'User-Agent': 'Memorwise/1.0 (document extraction)',
+        'User-Agent': 'TheStacks/1.0 (document extraction)',
         'Accept': 'application/json',
       },
       signal: AbortSignal.timeout(10000),
@@ -490,7 +490,7 @@ async function extractReddit(url: string): Promise<ExtractedContent> {
 
 async function extractGitHub(owner: string, repo: string): Promise<ExtractedContent> {
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, {
-    headers: { 'Accept': 'application/vnd.github.raw', 'User-Agent': 'Memorwise/1.0' },
+    headers: { 'Accept': 'application/vnd.github.raw', 'User-Agent': 'TheStacks/1.0' },
     signal: AbortSignal.timeout(15000),
   });
 
@@ -500,7 +500,7 @@ async function extractGitHub(owner: string, repo: string): Promise<ExtractedCont
   let title = `${owner}/${repo}`;
   try {
     const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-      headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Memorwise/1.0' },
+      headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'TheStacks/1.0' },
       signal: AbortSignal.timeout(5000),
     });
     if (repoRes.ok) {

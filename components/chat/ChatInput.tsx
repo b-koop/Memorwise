@@ -30,8 +30,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         setTimeout(() => textareaRef.current?.focus(), 100);
       }
     };
-    window.addEventListener('memorwise:prefill-chat', handler);
-    return () => window.removeEventListener('memorwise:prefill-chat', handler);
+    window.addEventListener('stacks:prefill-chat', handler);
+    return () => window.removeEventListener('stacks:prefill-chat', handler);
   }, []);
 
   const handleSend = () => {

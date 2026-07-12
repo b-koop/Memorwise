@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Memorwise MCP Server (Streamable HTTP)
+ * The Stacks MCP Server (Streamable HTTP)
  *
- * Exposes Memorwise's full functionality as MCP tools over the Streamable HTTP
+ * Exposes The Stacks' full functionality as MCP tools over the Streamable HTTP
  * transport, the current MCP standard. Built on the official
  * @modelcontextprotocol/sdk.
  *
@@ -11,7 +11,7 @@
  *   MCP_PORT=5000 node mcp-server.js
  *
  * Client config (pi / Cursor / Claude Code / Codex):
- *   { "mcpServers": { "memorwise": { "url": "http://localhost:4748/mcp" } } }
+ *   { "mcpServers": { "stacks": { "url": "http://localhost:4748/mcp" } } }
  *
  * Requires the server to be running independently (e.g. `npm run mcp`).
  */
@@ -102,7 +102,7 @@ function asText(result) {
 
 function createServer() {
 	const server = new McpServer({
-		name: "memorwise",
+		name: "stacks",
 		version: appPackage.version,
 	});
 
@@ -162,12 +162,12 @@ function createServer() {
 		},
 	);
 
-	server.tool("memorwise_list_notebooks", "List all notebooks", {}, async () =>
+	server.tool("stacks_list_notebooks", "List all notebooks", {}, async () =>
 		asText(await queries.listNotebooks()),
 	);
 
 	server.tool(
-		"memorwise_create_notebook",
+		"stacks_create_notebook",
 		"Create a new notebook",
 		{
 			name: z.string().describe("Notebook name"),
@@ -178,7 +178,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_get",
+		"stacks_get",
 		"Get a notebook, source, or note by ID. Returns full details including content.",
 		{
 			type: z.enum(["notebook", "source", "note"]),
@@ -212,7 +212,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_delete",
+		"stacks_delete",
 		"Delete a notebook (and all its data), a source (and its embeddings), or a note.",
 		{
 			type: z.enum(["notebook", "source", "note"]),
@@ -247,14 +247,14 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_list_sources",
+		"stacks_list_sources",
 		"List sources in a notebook with status and chunk count",
 		{ notebookId: z.string() },
 		async (args) => asText(queries.listSources(args.notebookId)),
 	);
 
 	server.tool(
-		"memorwise_add_source",
+		"stacks_add_source",
 		"Add a source to a notebook. Provide either a URL (web page or YouTube) or raw text content.",
 		{
 			notebookId: z.string(),
@@ -327,14 +327,14 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_list_notes",
+		"stacks_list_notes",
 		"List notes in a notebook",
 		{ notebookId: z.string() },
 		async (args) => asText(queries.listNotes(args.notebookId)),
 	);
 
 	server.tool(
-		"memorwise_create_note",
+		"stacks_create_note",
 		"Create a note in a notebook",
 		{
 			notebookId: z.string(),
@@ -348,7 +348,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_update_note",
+		"stacks_update_note",
 		"Update a note's title and/or content",
 		{
 			noteId: z.string(),
@@ -362,7 +362,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_chat",
+		"stacks_chat",
 		"Ask a question about notebook documents using RAG with citations",
 		{
 			notebookId: z.string(),
@@ -416,7 +416,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_search",
+		"stacks_search",
 		"Search across sources and notes in a notebook",
 		{ notebookId: z.string(), query: z.string() },
 		async (args) => {
@@ -453,7 +453,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_get_settings",
+		"stacks_get_settings",
 		"Get current provider, model, and data-dir settings",
 		{},
 		async () =>
@@ -469,7 +469,7 @@ function createServer() {
 	);
 
 	server.tool(
-		"memorwise_update_settings",
+		"stacks_update_settings",
 		"Update provider and/or chat model",
 		{
 			provider: z.string().optional(),
@@ -528,7 +528,7 @@ const httpServer = http.createServer(async (req, res) => {
 		res
 			.writeHead(403)
 			.end(
-				"Memorwise MCP is local-only; connect via localhost, 127.0.0.1, or [::1].",
+				"The Stacks MCP is local-only; connect via localhost, 127.0.0.1, or [::1].",
 			);
 		return;
 	}
@@ -564,7 +564,7 @@ const httpServer = http.createServer(async (req, res) => {
 					sessionIdGenerator: () => crypto.randomUUID(),
 					onsessioninitialized: (sid) => {
 						SESSIONS.set(sid, holder.session);
-						process.stderr.write(`[memorwise-mcp] session ${sid} started\n`);
+						process.stderr.write(`[stacks-mcp] session ${sid} started\n`);
 					},
 				});
 				const server = createServer();
@@ -598,13 +598,13 @@ const httpServer = http.createServer(async (req, res) => {
 		}
 		await session.transport.handleRequest(req, res);
 	} catch (err) {
-		process.stderr.write(`[memorwise-mcp] request error: ${err}\n`);
+		process.stderr.write(`[stacks-mcp] request error: ${err}\n`);
 		if (!res.headersSent) res.writeHead(500).end("Internal server error");
 	}
 });
 
 httpServer.listen(PORT, () => {
 	process.stderr.write(
-		`[memorwise-mcp] Streamable HTTP server listening on http://localhost:${PORT}/mcp\n`,
+		`[stacks-mcp] Streamable HTTP server listening on http://localhost:${PORT}/mcp\n`,
 	);
 });

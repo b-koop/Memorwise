@@ -18,13 +18,13 @@ export interface SearchResult {
   _distance: number;
 }
 
-const globalForLance = globalThis as unknown as { __memorwise_lance?: lancedb.Connection };
+const globalForLance = globalThis as unknown as { __thestacks_lance?: lancedb.Connection };
 
 async function getConnection(): Promise<lancedb.Connection> {
-  if (!globalForLance.__memorwise_lance) {
-    globalForLance.__memorwise_lance = await lancedb.connect(getLanceDbPath());
+  if (!globalForLance.__thestacks_lance) {
+    globalForLance.__thestacks_lance = await lancedb.connect(getLanceDbPath());
   }
-  return globalForLance.__memorwise_lance;
+  return globalForLance.__thestacks_lance;
 }
 
 function tableName(notebookId: string) {

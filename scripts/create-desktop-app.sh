@@ -1,8 +1,8 @@
 #!/bin/bash
-# Memorwise — Create Desktop App
+# The Stacks — Create Desktop App
 # Run: chmod +x scripts/create-desktop-app.sh && ./scripts/create-desktop-app.sh
 #
-# Creates a clickable app icon that starts Memorwise and opens the browser.
+# Creates a clickable app icon that starts The Stacks and opens the browser.
 # macOS: Creates a .app bundle in /Applications
 # Linux: Creates a .desktop launcher
 
@@ -28,12 +28,12 @@ fail() { log "  ${c_red}✗${c_reset} $1"; }
 step() { log "\n  ${c_cyan}>${c_reset} $1"; }
 
 log ""
-log "  ${c_bold}Memorwise — Desktop App Creator${c_reset}"
+log "  ${c_bold}The Stacks — Desktop App Creator${c_reset}"
 log "  ${c_dim}─────────────────────────────────${c_reset}"
 
 # ─── macOS ────────────────────────────────────
 if [[ "$(uname)" == "Darwin" ]]; then
-  APP_NAME="Memorwise"
+  APP_NAME="The Stacks"
   APP_PATH="/Applications/${APP_NAME}.app"
   ICON_SOURCE="$PROJECT_DIR/public/favicon.png"
 
@@ -44,7 +44,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   mkdir -p "$APP_PATH/Contents/Resources"
 
   # Create the launcher script
-  cat > "$APP_PATH/Contents/MacOS/Memorwise" << LAUNCHER
+  cat > "$APP_PATH/Contents/MacOS/TheStacks" << LAUNCHER
 #!/bin/bash
 PROJECT_DIR="$PROJECT_DIR"
 PORT=$PORT
@@ -58,8 +58,11 @@ if curl -s -o /dev/null --connect-timeout 1 "\$URL" 2>/dev/null; then
   exit 0
 fi
 
-# Start server in background
-npm run dev &>/dev/null &
+# Start server in background (production)
+if [ ! -f "\$PROJECT_DIR/.next/BUILD_ID" ]; then
+  npm run build &>/dev/null
+fi
+npm run start &>/dev/null &
 SERVER_PID=\$!
 
 # Wait for server to be ready (max 30s)
@@ -76,7 +79,7 @@ done
 open "\$URL"
 wait \$SERVER_PID
 LAUNCHER
-  chmod +x "$APP_PATH/Contents/MacOS/Memorwise"
+  chmod +x "$APP_PATH/Contents/MacOS/TheStacks"
 
   # Create Info.plist
   cat > "$APP_PATH/Contents/Info.plist" << PLIST
@@ -85,13 +88,13 @@ LAUNCHER
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>Memorwise</string>
+  <string>The Stacks</string>
   <key>CFBundleIdentifier</key>
-  <string>com.memorwise.app</string>
+  <string>com.the-stacks.app</string>
   <key>CFBundleName</key>
-  <string>Memorwise</string>
+  <string>The Stacks</string>
   <key>CFBundleDisplayName</key>
-  <string>Memorwise</string>
+  <string>The Stacks</string>
   <key>CFBundleVersion</key>
   <string>$VERSION</string>
   <key>CFBundleShortVersionString</key>
@@ -110,7 +113,7 @@ PLIST
 
   # Convert PNG to icns if sips is available
   if [[ -f "$ICON_SOURCE" ]] && command -v sips &>/dev/null; then
-    ICONSET_DIR=$(mktemp -d)/Memorwise.iconset
+    ICONSET_DIR=$(mktemp -d)/TheStacks.iconset
     mkdir -p "$ICONSET_DIR"
     for size in 16 32 64 128 256 512; do
       sips -z $size $size "$ICON_SOURCE" --out "$ICONSET_DIR/icon_${size}x${size}.png" &>/dev/null
@@ -131,7 +134,7 @@ PLIST
 
 # ─── Linux ────────────────────────────────────
 elif [[ "$(uname)" == "Linux" ]]; then
-  DESKTOP_FILE="$HOME/.local/share/applications/memorwise.desktop"
+  DESKTOP_FILE="$HOME/.local/share/applications/the-stacks.desktop"
   ICON_SOURCE="$PROJECT_DIR/public/favicon.png"
 
   step "Creating Linux desktop launcher"
@@ -139,7 +142,7 @@ elif [[ "$(uname)" == "Linux" ]]; then
   mkdir -p "$HOME/.local/share/applications"
 
   # Create launcher script
-  LAUNCHER_SCRIPT="$PROJECT_DIR/scripts/memorwise-launcher.sh"
+  LAUNCHER_SCRIPT="$PROJECT_DIR/scripts/the-stacks-launcher.sh"
   cat > "$LAUNCHER_SCRIPT" << LAUNCHER
 #!/bin/bash
 PROJECT_DIR="$PROJECT_DIR"
@@ -153,7 +156,10 @@ if curl -s -o /dev/null --connect-timeout 1 "\$URL" 2>/dev/null; then
   exit 0
 fi
 
-npm run dev &>/dev/null &
+if [ ! -f "\$PROJECT_DIR/.next/BUILD_ID" ]; then
+  npm run build &>/dev/null
+fi
+npm run start &>/dev/null &
 for i in {1..60}; do
   if curl -s -o /dev/null --connect-timeout 1 "http://localhost:\$PORT" 2>/dev/null; then
     xdg-open "\$URL"
@@ -168,27 +174,27 @@ LAUNCHER
   # Create .desktop file
   cat > "$DESKTOP_FILE" << DESKTOP
 [Desktop Entry]
-Name=Memorwise
+Name=The Stacks
 Comment=Chat with your documents locally
 Exec=$LAUNCHER_SCRIPT
 Icon=$ICON_SOURCE
 Terminal=false
 Type=Application
 Categories=Utility;Education;
-StartupWMClass=memorwise
+StartupWMClass=thestacks
 DESKTOP
 
   ok "Created desktop launcher"
   log ""
-  log "  ${c_dim}Find Memorwise in your app menu.${c_reset}"
+  log "  ${c_dim}Find The Stacks in your app menu.${c_reset}"
 
 else
   fail "Unsupported platform: $(uname)"
   log "  ${c_dim}This script supports macOS and Linux.${c_reset}"
-  log "  ${c_dim}On Windows, create a shortcut to: npx memorwise${c_reset}"
+  log "  ${c_dim}On Windows, create a shortcut to: npx the-stacks${c_reset}"
   exit 1
 fi
 
 log ""
-log "  ${c_green}${c_bold}Done!${c_reset} Click the Memorwise icon to launch."
+log "  ${c_green}${c_bold}Done!${c_reset} Click the The Stacks icon to launch."
 log ""

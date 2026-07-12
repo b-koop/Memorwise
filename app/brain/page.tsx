@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense } from "react";
 import { TopBar } from "@/components/layout/TopBar";
 import { BrainReviewView } from "@/components/brain/BrainReviewView";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import { ConfirmDialogProvider } from "@/components/ui/ConfirmDialog";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useEffect } from "react";
 
-export default function BrainPage() {
+function BrainContent() {
 	const loadSettings = useSettingsStore((s) => s.loadSettings);
 	const loadProviders = useSettingsStore((s) => s.loadProviders);
 
@@ -31,5 +32,19 @@ export default function BrainPage() {
 			<ToastContainer />
 			<ConfirmDialogProvider />
 		</div>
+	);
+}
+
+export default function BrainPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className="flex h-screen items-center justify-center bg-surface text-sm text-foreground-muted">
+					Loading…
+				</div>
+			}
+		>
+			<BrainContent />
+		</Suspense>
 	);
 }

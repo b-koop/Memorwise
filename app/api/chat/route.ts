@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   if (context) {
     const focusLine = sourceFilter ? `You are specifically answering questions about "${sourceFilter.filename}".` : '';
     systemPrompt = [
-      'You are a knowledgeable research assistant for Memorwise, a document analysis tool.',
+      'You are a knowledgeable research assistant for The Stacks, a document analysis tool.',
       focusLine,
       'The user has uploaded documents and is asking questions about them.',
       '',
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
   } else if (hasSources) {
     // Sources exist but RAG didn't find relevant chunks for this query
     systemPrompt = [
-      'You are a knowledgeable research assistant for Memorwise, a document analysis tool.',
+      'You are a knowledgeable research assistant for The Stacks, a document analysis tool.',
       `The user has ${allSources.length} document${allSources.length > 1 ? 's' : ''} loaded: ${allSourceNames.join(', ')}.`,
       'The current question did not match any specific document content, but the documents are available.',
       '',
@@ -85,10 +85,10 @@ export async function POST(req: Request) {
       '- If the user asks about their documents, let them know what sources are loaded and suggest they ask specific questions about the content.',
       '- For general questions, answer helpfully while reminding them you can help analyze their documents.',
       '- Do NOT say "no documents are indexed" — documents ARE loaded.',
-      '- You are Memorwise, a document research assistant. Do not reveal internal model details.',
+      '- You are The Stacks, a document research assistant. Do not reveal internal model details.',
     ].join('\n');
   } else {
-    systemPrompt = 'You are a helpful research assistant for Memorwise. No documents have been indexed in this notebook yet. Let the user know they should add sources (PDFs, URLs, images, audio, etc.) to start chatting about their documents. You can still answer general questions to the best of your ability.';
+    systemPrompt = 'You are a helpful research assistant for The Stacks. No documents have been indexed in this notebook yet. Let the user know they should add sources (PDFs, URLs, images, audio, etc.) to start chatting about their documents. You can still answer general questions to the best of your ability.';
   }
 
   const history = queries.getMessages(sessionId);

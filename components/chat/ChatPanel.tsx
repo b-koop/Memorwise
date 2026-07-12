@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '@/stores/chat-store';
 import { useNotebookStore } from '@/stores/notebook-store';
+import { useNotebookNav } from '@/components/navigation/NotebookNavigationProvider';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 
@@ -34,6 +36,7 @@ export function ChatPanel() {
     setFocusedSource,
   } = useChatStore();
   const { selectedNotebookId, sources } = useNotebookStore();
+  const { replaceNotebookUrl, buildHref, urlState } = useNotebookNav();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -68,6 +71,12 @@ export function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  useEffect(() => {
+    if (urlState.session && urlState.session !== activeSessionId) {
+      void selectSession(urlState.session);
+    }
+  }, [urlState.session, activeSessionId, selectSession]);
+
   const handleSend = (text: string) => {
     if (!selectedNotebookId || !activeSessionId) return;
     sendMessage(selectedNotebookId, text);
@@ -78,9 +87,24 @@ export function ChatPanel() {
     handleSend(q);
   };
 
-  const handleFork = (messageId: string) => {
+  const handleFork = async (messageId: string) => {
     if (!selectedNotebookId || !activeSessionId) return;
-    forkSession(activeSessionId, selectedNotebookId, messageId);
+    await forkSession(activeSessionId, selectedNotebookId, messageId);
+    const nextId = useChatStore.getState().activeSessionId;
+    if (nextId) replaceNotebookUrl({ session: nextId, view: 'chat' });
+  };
+
+  const handleCreateSession = async () => {
+    if (!selectedNotebookId) return;
+    const session = await createSession(selectedNotebookId);
+    replaceNotebookUrl({ session: session.id, view: 'chat' });
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!selectedNotebookId) return;
+    await deleteSession(sessionId, selectedNotebookId);
+    const nextId = useChatStore.getState().activeSessionId;
+    if (nextId) replaceNotebookUrl({ session: nextId, view: 'chat' });
   };
 
   return (
@@ -92,28 +116,27 @@ export function ChatPanel() {
             {sessions.map((session) => {
               const isActive = session.id === activeSessionId;
               return (
-                <motion.button
-                  key={session.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  onClick={() => selectSession(session.id)}
-                  className={`group flex items-center gap-2 px-3 py-1.5 text-[13px] rounded-md whitespace-nowrap transition-colors ${
-                    isActive
-                      ? 'bg-elevated text-foreground'
-                      : 'text-foreground-secondary hover:text-foreground hover:bg-elevated/50'
-                  }`}
-                >
-                  <MessageSquare size={13} />
-                  <span className="max-w-[100px] truncate">
-                    {session.title || 'New Chat'}
-                  </span>
+                <motion.div key={session.id} layout initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                  className="group flex items-center">
+                  <Link
+                    href={buildHref({ view: 'chat', session: session.id, note: null })}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-[13px] rounded-md whitespace-nowrap transition-colors ${
+                      isActive
+                        ? 'bg-elevated text-foreground'
+                        : 'text-foreground-secondary hover:text-foreground hover:bg-elevated/50'
+                    }`}
+                  >
+                    <MessageSquare size={13} />
+                    <span className="max-w-[100px] truncate">
+                      {session.title || 'New Chat'}
+                    </span>
+                  </Link>
                   <span
                     onClick={(e) => {
                       e.stopPropagation();
                       if (selectedNotebookId)
-                        deleteSession(session.id, selectedNotebookId);
+                        void handleDeleteSession(session.id);
                     }}
                     className={`p-0.5 rounded hover:bg-border-subtle transition-colors ${
                       isActive
@@ -123,12 +146,12 @@ export function ChatPanel() {
                   >
                     <X size={12} />
                   </span>
-                </motion.button>
+                </motion.div>
               );
             })}
           </AnimatePresence>
           <button
-            onClick={() => selectedNotebookId && createSession(selectedNotebookId)}
+            onClick={() => void handleCreateSession()}
             className="flex items-center gap-1 px-2 py-1 text-[12px] text-foreground-muted hover:text-foreground-secondary hover:bg-elevated rounded-md transition-colors shrink-0 ml-auto"
             title="New chat session"
           >
@@ -157,7 +180,7 @@ export function ChatPanel() {
             <div className="text-center max-w-md">
               {hasSources ? (
                 <>
-                  <img src="/logo-mark.png" alt="Memorwise" className="h-10 mx-auto mb-3 logo-adaptive opacity-60" style={{ width: 'auto' }} />
+                  <img src="/logo-mark.png" alt="The Stacks" className="h-10 mx-auto mb-3 logo-adaptive opacity-60" style={{ width: 'auto' }} />
                   <p className="text-sm text-foreground-secondary mb-4">
                     Ask a question about your documents
                   </p>

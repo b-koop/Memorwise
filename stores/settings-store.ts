@@ -14,6 +14,11 @@ interface SettingsState {
   kokoroUrl: string;
   kokoroVoice: string;
   podcastSpeakers: number;
+  searchProvider: string;
+  serperApiKey: string;
+  hasSerperApiKey: boolean;
+  searchAvailable: boolean;
+  deepResearchSearchLimit: number;
   availableModels: LLMModel[];
   providers: { id: string; name: string; available: boolean; apiKey?: string; hasApiKey?: boolean; baseUrl?: string }[];
 
@@ -33,6 +38,10 @@ interface SettingsState {
   setKokoroVoice: (voice: string) => Promise<void>;
   setPodcastSpeakers: (n: number) => Promise<void>;
   setTTSVoice: (voice: string) => Promise<void>;
+  setSearchProvider: (id: string) => Promise<void>;
+  configureSerperKey: (apiKey: string) => Promise<void>;
+  setDeepResearchSearchLimit: (limit: number) => Promise<void>;
+  testSearchConnection: () => Promise<boolean>;
   configureProvider: (id: string, config: { apiKey?: string; baseUrl?: string }) => Promise<void>;
   testConnection: (id: string) => Promise<boolean>;
 }
@@ -50,6 +59,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   kokoroUrl: 'http://localhost:8787',
   kokoroVoice: 'af_heart',
   podcastSpeakers: 2,
+  searchProvider: 'serper',
+  serperApiKey: '',
+  hasSerperApiKey: false,
+  searchAvailable: false,
+  deepResearchSearchLimit: 5,
   availableModels: [],
   providers: [],
 
@@ -60,7 +74,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       const res = await fetch('/api/settings');
       const data = await res.json();
-      set({ activeProvider: data.activeProvider, activeChatModel: data.activeChatModel, activeEmbeddingModel: data.activeEmbeddingModel, embeddingProvider: data.embeddingProvider || 'auto', transcriptionProvider: data.transcriptionProvider || 'openai', localWhisperModel: data.localWhisperModel || '', ttsProvider: data.ttsProvider || 'openai', ttsVoice: data.ttsVoice || 'nova', kokoroUrl: data.kokoroUrl || 'http://localhost:8787', kokoroVoice: data.kokoroVoice || 'af_heart', podcastSpeakers: data.podcastSpeakers || 2 });
+      set({ activeProvider: data.activeProvider, activeChatModel: data.activeChatModel, activeEmbeddingModel: data.activeEmbeddingModel, embeddingProvider: data.embeddingProvider || 'auto', transcriptionProvider: data.transcriptionProvider || 'openai', localWhisperModel: data.localWhisperModel || '', ttsProvider: data.ttsProvider || 'openai', ttsVoice: data.ttsVoice || 'nova', kokoroUrl: data.kokoroUrl || 'http://localhost:8787', kokoroVoice: data.kokoroVoice || 'af_heart', podcastSpeakers: data.podcastSpeakers || 2, searchProvider: data.searchProvider || 'serper', serperApiKey: data.serperApiKey || '', hasSerperApiKey: data.hasSerperApiKey || false, searchAvailable: data.searchAvailable || false, deepResearchSearchLimit: data.deepResearchSearchLimit || 5 });
     } catch {}
   },
 
@@ -129,6 +143,31 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setPodcastSpeakers: async (n: number) => {
     await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastSpeakers: n }) });
     set({ podcastSpeakers: n });
+  },
+
+  setSearchProvider: async (id: string) => {
+    await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ searchProvider: id }) });
+    set({ searchProvider: id });
+  },
+
+  configureSerperKey: async (apiKey: string) => {
+    await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serperApiKey: apiKey }) });
+    const res = await fetch('/api/settings');
+    if (res.ok) {
+      const data = await res.json();
+      set({ serperApiKey: data.serperApiKey || '', hasSerperApiKey: data.hasSerperApiKey || false, searchAvailable: data.searchAvailable || false });
+    }
+  },
+
+  setDeepResearchSearchLimit: async (limit: number) => {
+    await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deepResearchSearchLimit: limit }) });
+    set({ deepResearchSearchLimit: limit });
+  },
+
+  testSearchConnection: async () => {
+    const res = await fetch('/api/search/test', { method: 'POST' });
+    const data = await res.json();
+    return !!data.available;
   },
 
   configureProvider: async (id: string, config) => {
